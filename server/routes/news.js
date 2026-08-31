@@ -123,58 +123,48 @@ router.get('/local', requireAuth, async (req, res) => {
 // ---------------------------------------------------------
 // ---------------------------------------------------------
 // GET /api/news/personalized (protected)
-// user preferences -> cached MySQL articles -> score -> return
-// External news refresh happens in the background.
+// Fast path: use MySQL immediately.
+// Background path: refresh NewsAPI without blocking response.
 // ---------------------------------------------------------
 router.get('/personalized', requireAuth, async (req, res) => {
   try {
-    // Build the personalized feed from articles that are
-    // already stored in MySQL. This keeps the response fast.
-    const feed = await getPersonalizedFeed(req.session.userId, {
+    const userId = req.session.userId;
+
+    // 1. Try the fast MySQL-based personalized feed.
+    let feed = await getPersonalizedFeed(userId, {
       limit: 30
     });
 
-    // Return the response immediately.
-    res.json({ articles: feed });
+    // 2. Return what we already have immediately.
+    // If there are existing articles, do not make the user wait.
+    if (feed.length > 0) {
+      res.json({ articles: feed });
 
-    // Refresh the candidate pool AFTER the response has been sent.
-    // This prevents the user from waiting for NewsAPI.
-    setImmediate(async () => {
-      try {
-        const [interestRows] = await db.query(
-          `SELECT c.slug
-           FROM user_interests ui
-           JOIN categories c ON c.id = ui.category_id
-           WHERE ui.user_id = ?`,
-          [req.session.userId]
-        );
-
-        await Promise.all(
-          interestRows.slice(0, 3).map(async ({ slug }) => {
-            try {
-              const articles = await provider.getTopHeadlines({
-                category: slug,
-                pageSize: 10
-              });
-
-              await ingestBatch(articles, {
-                categorySlug: slug
-              });
-            } catch (e) {
-              console.error(
-                `Background ingestion failed for ${slug}:`,
-                e.message
-              );
-            }
-          })
-        );
-      } catch (e) {
+      refreshPersonalizedPool(userId).catch((err) => {
         console.error(
           'Background personalized refresh failed:',
-          e.message
+          err.message
         );
-      }
-    });
+      });
+
+      return;
+    }
+
+    // 3. First-time/empty-cache fallback.
+    // Populate a small candidate pool before responding.
+    try {
+      await refreshPersonalizedPool(userId);
+      feed = await getPersonalizedFeed(userId, {
+        limit: 30
+      });
+    } catch (e) {
+      console.error(
+        'Initial personalized refresh failed:',
+        e.message
+      );
+    }
+
+    res.json({ articles: feed });
 
   } catch (err) {
     console.error('personalized feed error:', err);
@@ -184,6 +174,36 @@ router.get('/personalized', requireAuth, async (req, res) => {
     });
   }
 });
+
+async function refreshPersonalizedPool(userId) {
+  const [interestRows] = await db.query(
+    `SELECT c.slug
+     FROM user_interests ui
+     JOIN categories c ON c.id = ui.category_id
+     WHERE ui.user_id = ?`,
+    [userId]
+  );
+
+  await Promise.all(
+    interestRows.slice(0, 3).map(async ({ slug }) => {
+      try {
+        const articles = await provider.getTopHeadlines({
+          category: slug,
+          pageSize: 10
+        });
+
+        await ingestBatch(articles, {
+          categorySlug: slug
+        });
+      } catch (e) {
+        console.error(
+          `Background ingestion failed for ${slug}:`,
+          e.message
+        );
+      }
+    })
+  );
+}
 
 // ---------------------------------------------------------
 // GET /api/news/article/:id — article detail (from local DB) + related
