@@ -4,26 +4,56 @@ const { getNewsProvider } = require('../services/newsProviderFactory');
 const { ingestBatch } = require('../services/ingestionService');
 const { getPersonalizedFeed, formatArticle } = require('../services/personalizationEngine');
 const { scoreLocationRelevance } = require('../services/locationMatcher');
+const apiCache = require('../services/apiCache');
 const requireAuth = require('../middleware/requireAuth');
 
 const router = express.Router();
-const provider = getNewsProvider(); // Browser never talks to this directly — only via these routes.
+const provider = getNewsProvider();
+
+const CACHE_TTL = {
+  headlines: 5 * 60,
+  search: 2 * 60,
+  sources: 60 * 60,
+  location: 10 * 60
+};
 
 function safeMessage(err) {
   return err && err.message ? err.message : 'Unexpected error';
 }
 
+async function getCachedOrFetch(namespace, params, ttlSeconds, fetcher) {
+  const cached = await apiCache.get(namespace, params);
+  if (cached) return { value: cached, cached: true };
+
+  const value = await fetcher();
+  await apiCache.set(namespace, params, value, ttlSeconds);
+  return { value, cached: false };
+}
+
 // ---------------------------------------------------------
-// GET /api/news/headlines?category=&country=&q=
-// Browser -> Express -> NewsProvider.getTopHeadlines() -> NewsAPI
-// Ingests results into MySQL, then returns them.
+// GET /api/news/headlines
+// Uses persistent cache first to avoid repeated NewsProvider calls.
 // ---------------------------------------------------------
 router.get('/headlines', async (req, res) => {
   try {
     const { category, country = 'us', q } = req.query;
-    const articles = await provider.getTopHeadlines({ category, country, q, pageSize: 30 });
-    await ingestBatch(articles, { categorySlug: category });
-    res.json({ articles });
+    const params = { category, country, q, pageSize: 30 };
+
+    const result = await getCachedOrFetch(
+      'headlines',
+      params,
+      CACHE_TTL.headlines,
+      () => provider.getTopHeadlines(params)
+    );
+
+    // Only ingest fresh provider responses. Cached responses were already
+    // ingested when first fetched.
+    if (!result.cached) {
+      await ingestBatch(result.value, { categorySlug: category });
+    }
+
+    res.set('X-NewsHub-Cache', result.cached ? 'HIT' : 'MISS');
+    res.json({ articles: result.value });
   } catch (err) {
     console.error('headlines error:', err);
     res.status(502).json({ error: `Could not fetch headlines: ${safeMessage(err)}` });
@@ -31,8 +61,8 @@ router.get('/headlines', async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// GET /api/news/search?q=&sortBy=
-// Browser -> Express -> NewsProvider.search() -> NewsAPI
+// GET /api/news/search
+// Short cache because search results change frequently.
 // ---------------------------------------------------------
 router.get('/search', async (req, res) => {
   try {
@@ -40,22 +70,29 @@ router.get('/search', async (req, res) => {
     if (!q || !q.trim()) {
       return res.status(400).json({ error: 'Please provide a search query (?q=).' });
     }
-    const articles = await provider.search({ q, sortBy, pageSize: 30 });
-    await ingestBatch(articles, {});
 
-    // Also search anything already stored locally that matches, in case
-    // the live provider call is rate-limited or partial.
+    const params = { q: q.trim(), sortBy, pageSize: 30 };
+    const result = await getCachedOrFetch(
+      'search',
+      params,
+      CACHE_TTL.search,
+      () => provider.search(params)
+    );
+
+    if (!result.cached) await ingestBatch(result.value, {});
+
     const [localMatches] = await db.query(
       `SELECT a.*, s.name AS source_name FROM articles a
        LEFT JOIN sources s ON s.id = a.source_id
        WHERE MATCH(a.title, a.description, a.content) AGAINST (? IN NATURAL LANGUAGE MODE)
        ORDER BY a.published_at DESC LIMIT 30`,
-      [q]
+      [params.q]
     );
 
+    res.set('X-NewsHub-Cache', result.cached ? 'HIT' : 'MISS');
     res.json({
-      articles,
-      cached: localMatches.map((a) => ({ ...formatArticle(a) }))
+      articles: result.value,
+      cached: localMatches.map((a) => formatArticle(a))
     });
   } catch (err) {
     console.error('search error:', err);
@@ -65,13 +102,22 @@ router.get('/search', async (req, res) => {
 
 // ---------------------------------------------------------
 // GET /api/news/sources
-// Browser -> Express -> NewsProvider.getSources() -> NewsAPI
+// Sources change slowly, so cache for one hour.
 // ---------------------------------------------------------
 router.get('/sources', async (req, res) => {
   try {
     const { country, category } = req.query;
-    const sources = await provider.getSources({ country, category });
-    res.json({ sources });
+    const params = { country, category };
+
+    const result = await getCachedOrFetch(
+      'sources',
+      params,
+      CACHE_TTL.sources,
+      () => provider.getSources(params)
+    );
+
+    res.set('X-NewsHub-Cache', result.cached ? 'HIT' : 'MISS');
+    res.json({ sources: result.value });
   } catch (err) {
     console.error('sources error:', err);
     res.status(502).json({ error: `Could not fetch sources: ${safeMessage(err)}` });
@@ -79,7 +125,7 @@ router.get('/sources', async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// Local-news cache helpers
+// Local-news helpers
 // ---------------------------------------------------------
 async function getUserLocation(userId) {
   const [[prefs]] = await db.query(
@@ -93,10 +139,7 @@ async function getUserLocation(userId) {
 }
 
 async function getCachedLocalArticles(prefs, limit = 24) {
-  const locationTags = [...new Set(
-    [prefs.city, prefs.state, prefs.country].filter(Boolean)
-  )];
-
+  const locationTags = [...new Set([prefs.city, prefs.state, prefs.country].filter(Boolean))];
   if (!locationTags.length) return [];
 
   const [rows] = await db.query(
@@ -104,13 +147,11 @@ async function getCachedLocalArticles(prefs, limit = 24) {
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
      WHERE a.location_tag IN (?)
-       AND (a.published_at >= (NOW() - INTERVAL 7 DAY)
-            OR a.published_at IS NULL)
+       AND (a.published_at >= (NOW() - INTERVAL 7 DAY) OR a.published_at IS NULL)
      ORDER BY a.published_at DESC
      LIMIT ?`,
     [locationTags, limit]
   );
-
   return rows;
 }
 
@@ -130,30 +171,36 @@ function rankLocalArticles(rows, prefs) {
 }
 
 async function refreshLocalPool(prefs) {
-  const articles = await provider.getByLocation({
+  const params = {
     city: prefs.city,
     state: prefs.state,
     country: prefs.country,
     countryCode: prefs.country_code,
     pageSize: 24
-  });
+  };
 
-  if (articles.length) {
-    await ingestBatch(articles, {
+  const result = await getCachedOrFetch(
+    'location',
+    params,
+    CACHE_TTL.location,
+    () => provider.getByLocation(params)
+  );
+
+  if (!result.cached && result.value.length) {
+    await ingestBatch(result.value, {
       locationTag: prefs.city || prefs.state || prefs.country
     });
   }
+
+  return result;
 }
 
 // ---------------------------------------------------------
-// GET /api/news/local (protected)
-// Fast path: return cached MySQL stories immediately.
-// Background path: refresh NewsAPI after the response.
+// GET /api/news/local
 // ---------------------------------------------------------
 router.get('/local', requireAuth, async (req, res) => {
   try {
     const prefs = await getUserLocation(req.session.userId);
-
     if (!prefs) {
       return res.status(400).json({
         error: 'No location set yet. Please complete onboarding or set a location in your profile.'
@@ -163,91 +210,49 @@ router.get('/local', requireAuth, async (req, res) => {
     const cachedRows = await getCachedLocalArticles(prefs);
 
     if (cachedRows.length > 0) {
-      res.json({
-        location: prefs,
-        articles: rankLocalArticles(cachedRows, prefs)
-      });
-
+      res.json({ location: prefs, articles: rankLocalArticles(cachedRows, prefs) });
       setImmediate(() => {
-        refreshLocalPool(prefs).catch((err) => {
-          console.error('Background local refresh failed:', err.message);
-        });
+        refreshLocalPool(prefs).catch((err) => console.error('Background local refresh failed:', err.message));
       });
-
       return;
     }
 
-    // Cold-cache fallback for a new location.
     await refreshLocalPool(prefs);
     const freshRows = await getCachedLocalArticles(prefs);
-
-    res.json({
-      location: prefs,
-      articles: rankLocalArticles(freshRows, prefs)
-    });
+    res.json({ location: prefs, articles: rankLocalArticles(freshRows, prefs) });
   } catch (err) {
     console.error('local news error:', err);
-    res.status(502).json({
-      error: `Could not fetch local news: ${safeMessage(err)}`
-    });
+    res.status(502).json({ error: `Could not fetch local news: ${safeMessage(err)}` });
   }
 });
+
 // ---------------------------------------------------------
-// GET /api/news/personalized (protected)
-// user preferences -> cached MySQL articles -> score -> return
-// External news refresh happens in the background.
-// ---------------------------------------------------------
-// ---------------------------------------------------------
-// GET /api/news/personalized (protected)
-// Fast path: use MySQL immediately.
-// Background path: refresh NewsAPI without blocking response.
+// GET /api/news/personalized
 // ---------------------------------------------------------
 router.get('/personalized', requireAuth, async (req, res) => {
   try {
     const userId = req.session.userId;
+    let feed = await getPersonalizedFeed(userId, { limit: 30 });
 
-    // 1. Try the fast MySQL-based personalized feed.
-    let feed = await getPersonalizedFeed(userId, {
-      limit: 30
-    });
-
-    // 2. Return what we already have immediately.
-    // If there are existing articles, do not make the user wait.
     if (feed.length > 0) {
       res.json({ articles: feed });
-
       refreshPersonalizedPool(userId).catch((err) => {
-        console.error(
-          'Background personalized refresh failed:',
-          err.message
-        );
+        console.error('Background personalized refresh failed:', err.message);
       });
-
       return;
     }
 
-    // 3. First-time/empty-cache fallback.
-    // Populate a small candidate pool before responding.
     try {
       await refreshPersonalizedPool(userId);
-      feed = await getPersonalizedFeed(userId, {
-        limit: 30
-      });
+      feed = await getPersonalizedFeed(userId, { limit: 30 });
     } catch (e) {
-      console.error(
-        'Initial personalized refresh failed:',
-        e.message
-      );
+      console.error('Initial personalized refresh failed:', e.message);
     }
 
     res.json({ articles: feed });
-
   } catch (err) {
     console.error('personalized feed error:', err);
-
-    res.status(500).json({
-      error: `Could not build personalized feed: ${safeMessage(err)}`
-    });
+    res.status(500).json({ error: `Could not build personalized feed: ${safeMessage(err)}` });
   }
 });
 
@@ -263,26 +268,26 @@ async function refreshPersonalizedPool(userId) {
   await Promise.all(
     interestRows.slice(0, 3).map(async ({ slug }) => {
       try {
-        const articles = await provider.getTopHeadlines({
-          category: slug,
-          pageSize: 10
-        });
-
-        await ingestBatch(articles, {
-          categorySlug: slug
-        });
-      } catch (e) {
-        console.error(
-          `Background ingestion failed for ${slug}:`,
-          e.message
+        const params = { category: slug, pageSize: 10 };
+        const result = await getCachedOrFetch(
+          'personalized-headlines',
+          params,
+          CACHE_TTL.headlines,
+          () => provider.getTopHeadlines(params)
         );
+
+        if (!result.cached) {
+          await ingestBatch(result.value, { categorySlug: slug });
+        }
+      } catch (e) {
+        console.error(`Background ingestion failed for ${slug}:`, e.message);
       }
     })
   );
 }
 
 // ---------------------------------------------------------
-// GET /api/news/article/:id — article detail (from local DB) + related
+// GET /api/news/article/:id
 // ---------------------------------------------------------
 router.get('/article/:id', async (req, res) => {
   try {
@@ -316,7 +321,7 @@ router.get('/article/:id', async (req, res) => {
 
     if (req.session && req.session.userId) {
       await db.query(
-        `INSERT INTO reading_history (user_id, article_id, reading_progress) VALUES (?, ?, 0)`,
+        'INSERT INTO reading_history (user_id, article_id, reading_progress) VALUES (?, ?, 0)',
         [req.session.userId, id]
       );
     }
@@ -328,14 +333,11 @@ router.get('/article/:id', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------
-// POST /api/news/article/:id/progress (protected) — update reading_history
-// ---------------------------------------------------------
 router.post('/article/:id/progress', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const progress = Math.max(0, Math.min(100, Number(req.body.progress) || 0));
   await db.query(
-    `UPDATE reading_history SET reading_progress = ? 
+    `UPDATE reading_history SET reading_progress = ?
      WHERE user_id = ? AND article_id = ?
      ORDER BY read_at DESC LIMIT 1`,
     [progress, req.session.userId, id]
@@ -343,17 +345,11 @@ router.post('/article/:id/progress', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------------------------------------------------------
-// GET /api/news/categories
-// ---------------------------------------------------------
 router.get('/categories', async (req, res) => {
   const [rows] = await db.query('SELECT id, name, slug FROM categories ORDER BY name');
   res.json({ categories: rows });
 });
 
-// ---------------------------------------------------------
-// GET /api/news/archives?date=YYYY-MM-DD&category=
-// ---------------------------------------------------------
 router.get('/archives', async (req, res) => {
   const { date, category, page = 1 } = req.query;
   const limit = 20;
@@ -362,6 +358,7 @@ router.get('/archives', async (req, res) => {
              FROM articles a LEFT JOIN sources s ON s.id = a.source_id`;
   const params = [];
   const clauses = [];
+
   if (date) {
     clauses.push('DATE(a.published_at) = ?');
     params.push(date);
