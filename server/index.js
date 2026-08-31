@@ -11,7 +11,7 @@ const newsRoutes = require('./routes/news');
 const userRoutes = require('./routes/user');
 
 const app = express();
-app.set('trust proxy', 1);
+// app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
@@ -28,7 +28,7 @@ app.use(session({
   maxAge: 1000 * 60 * 60 * 24 * 14,
   httpOnly: true,
   sameSite: 'lax',
-  secure: process.env.NODE_ENV === 'production'
+  // secure: process.env.NODE_ENV === 'production'
 }
 }));
 
@@ -56,6 +56,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`NewsHub server running on port ${PORT}`);
+// app.listen(PORT, '0.0.0.0', () => {
+//   console.log(`NewsHub server running on port ${PORT}`);
+// });
+app.listen(PORT, () => {
+  console.log(`NewsHub server running at http://localhost:${PORT}`);
 });
