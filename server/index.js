@@ -24,10 +24,11 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 14, // 14 days
-    httpOnly: true,
-    sameSite: 'lax'
-  }
+  maxAge: 1000 * 60 * 60 * 24 * 14,
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production'
+}
 }));
 
 // ---- API routes ----
@@ -54,6 +55,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`NewsHub server running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`NewsHub server running on port ${PORT}`);
 });
