@@ -1,31 +1,7 @@
 const db = require('../config/db');
 const { scoreLocationRelevance } = require('./locationMatcher');
 
-/**
- * Rule-based personalization engine (v1, no ML/AI).
- *
- * Score weights (sum to 1.0):
- *   Interest match     40%
- *   Location relevance 25%
- *   Recency            15%
- *   Source preference  10%
- *   Trending signal    10%
- *
- * Flow:
- *   user preferences -> candidate articles -> score articles -> sort -> return
- *
- * This depends entirely on data stored for the *specific* logged-in
- * user (their interests, followed sources, and location), so two
- * different users produce two different feeds from the same candidate pool.
- */
-
-const WEIGHTS = {
-  interest: 0.40,
-  location: 0.25,
-  recency: 0.15,
-  source: 0.10,
-  trending: 0.10
-};
+const WEIGHTS = { interest: 0.40, location: 0.25, recency: 0.15, source: 0.10, trending: 0.10 };
 
 async function getUserContext(userId) {
   const [interestRows] = await db.query(
@@ -61,8 +37,7 @@ function recencyScore(publishedAt) {
   if (!publishedAt) return 0.3;
   const ageHours = (Date.now() - new Date(publishedAt).getTime()) / 3600000;
   if (ageHours <= 0) return 1;
-  if (ageHours >= 168) return 0.05; // older than a week -> floor
-  // exponential-ish decay across a week
+  if (ageHours >= 168) return 0.05;
   return Math.max(0.05, 1 - ageHours / 168);
 }
 
@@ -71,16 +46,11 @@ function trendingScoreNormalized(trendingScore, max) {
   return Math.min(1, trendingScore / max);
 }
 
-/**
- * Score one candidate article for one user context.
- */
 function scoreArticle(article, ctx, maxTrending) {
-  // Interest match: does the article belong to any of the user's chosen categories?
   const articleCategoryIds = article.categoryIds || [];
   const interestHit = articleCategoryIds.some((id) => ctx.interestCategoryIds.has(id));
   const interestScore = ctx.interestCategoryIds.size === 0 ? 0.5 : (interestHit ? 1 : 0.1);
 
-  // Location relevance
   const { score: locationScore } = scoreLocationRelevance(ctx.location, {
     locationTag: article.location_tag,
     countryCode: article.country_code,
@@ -88,15 +58,10 @@ function scoreArticle(article, ctx, maxTrending) {
     description: article.description
   });
 
-  // Recency
   const recency = recencyScore(article.published_at);
-
-  // Source preference
   const sourceScore = ctx.preferredSourceIds.size === 0
     ? 0.5
     : (ctx.preferredSourceIds.has(article.source_id) ? 1 : 0.2);
-
-  // Trending signal
   const trending = trendingScoreNormalized(article.trending_score, maxTrending);
 
   const total =
@@ -112,33 +77,45 @@ function scoreArticle(article, ctx, maxTrending) {
   };
 }
 
-/**
- * Build a personalized, ranked feed for a given user from articles
- * already ingested into MySQL.
- */
 async function getPersonalizedFeed(userId, { limit = 30 } = {}) {
   const ctx = await getUserContext(userId);
 
+  // Bounded candidate pool: for limit 30 this scores 180 candidates, not 400.
+  const candidateLimit = Math.min(240, Math.max(limit * 6, 120));
+
   const [candidates] = await db.query(
-    `SELECT a.*, s.name AS source_name, s.logo_url AS source_logo,
-            GROUP_CONCAT(ac.category_id) AS category_ids
+    `SELECT a.id, a.external_id, a.source_id, a.title, a.description, a.content,
+            a.url, a.url_hash, a.image_url, a.author, a.published_at, a.fetched_at,
+            a.language, a.country_code, a.location_tag, a.trending_score,
+            s.name AS source_name, s.logo_url AS source_logo,
+            (SELECT GROUP_CONCAT(ac.category_id)
+             FROM article_categories ac
+             WHERE ac.article_id = a.id) AS category_ids
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
-     LEFT JOIN article_categories ac ON ac.article_id = a.id
-     WHERE a.published_at >= (NOW() - INTERVAL 14 DAY) OR a.published_at IS NULL
-     GROUP BY a.id
-     ORDER BY a.published_at DESC
-     LIMIT 400`
+     WHERE (a.published_at >= (NOW() - INTERVAL 14 DAY) OR a.published_at IS NULL)
+     ORDER BY a.published_at DESC, a.id DESC
+     LIMIT ?`,
+    [candidateLimit]
   );
 
-  const maxTrending = candidates.reduce((m, a) => Math.max(m, Number(a.trending_score) || 0), 0);
+  const maxTrending = candidates.reduce(
+    (m, a) => Math.max(m, Number(a.trending_score) || 0),
+    0
+  );
 
   const scored = candidates.map((a) => {
     const categoryIds = (a.category_ids || '')
       .split(',')
       .filter(Boolean)
       .map(Number);
-    const { total, breakdown } = scoreArticle({ ...a, categoryIds }, ctx, maxTrending);
+
+    const { total, breakdown } = scoreArticle(
+      { ...a, categoryIds },
+      ctx,
+      maxTrending
+    );
+
     return { article: a, score: total, breakdown };
   });
 
