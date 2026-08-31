@@ -83,67 +83,67 @@ router.get('/sources', async (req, res) => {
 // NewsProvider.getByLocation() applies the NewsAPI keyword-search
 // workaround internally; this route just calls the abstraction.
 // ---------------------------------------------------------
-router.get('/local', requireAuth, async (req, res) => {
-  try {
-    const [[prefs]] = await db.query(
-      `SELECT l.city, l.state, l.country, l.country_code
-       FROM user_preferences up JOIN locations l ON l.id = up.location_id
-       WHERE up.user_id = ?`,
-      [req.session.userId]
-    );
-
-    if (!prefs) {
-      return res.status(400).json({ error: 'No location set yet. Please complete onboarding or set a location in your profile.' });
-    }
-
-    const articles = await provider.getByLocation({
-      city: prefs.city,
-      state: prefs.state,
-      country: prefs.country,
-      countryCode: prefs.country_code,
-      pageSize: 24
-    });
-    await ingestBatch(articles, { locationTag: prefs.city || prefs.state || prefs.country });
-
-    // Rank using the reusable location matcher
-    const ranked = articles
-      .map((a) => ({ ...a, _rel: scoreLocationRelevance(prefs, { title: a.title, description: a.description, countryCode: a.countryCode }) }))
-      .sort((a, b) => b._rel.score - a._rel.score);
-
-    res.json({ location: prefs, articles: ranked });
-  } catch (err) {
-    console.error('local news error:', err);
-    res.status(502).json({ error: `Could not fetch local news: ${safeMessage(err)}` });
-  }
-});
-
 // ---------------------------------------------------------
 // GET /api/news/personalized (protected)
-// user preferences -> candidate articles -> score -> sort -> return
+// user preferences -> cached MySQL articles -> score -> return
+// External news refresh happens in the background.
 // ---------------------------------------------------------
 router.get('/personalized', requireAuth, async (req, res) => {
   try {
-    // Make sure there is a reasonably fresh candidate pool for this user's
-    // interests before scoring (best-effort; ignore provider failures so
-    // personalization still works against whatever is already cached).
-    const [interestRows] = await db.query(
-      `SELECT c.slug FROM user_interests ui JOIN categories c ON c.id = ui.category_id WHERE ui.user_id = ?`,
-      [req.session.userId]
-    );
-    await Promise.all(
-      interestRows.slice(0, 3).map(async ({ slug }) => {
-        try {
-          const articles = await provider.getTopHeadlines({ category: slug, pageSize: 10 });
-          await ingestBatch(articles, { categorySlug: slug });
-        } catch (e) { /* best effort */ }
-      })
-    );
+    // Build the personalized feed from articles that are
+    // already stored in MySQL. This keeps the response fast.
+    const feed = await getPersonalizedFeed(req.session.userId, {
+      limit: 30
+    });
 
-    const feed = await getPersonalizedFeed(req.session.userId, { limit: 30 });
+    // Return the response immediately.
     res.json({ articles: feed });
+
+    // Refresh the candidate pool AFTER the response has been sent.
+    // This prevents the user from waiting for NewsAPI.
+    setImmediate(async () => {
+      try {
+        const [interestRows] = await db.query(
+          `SELECT c.slug
+           FROM user_interests ui
+           JOIN categories c ON c.id = ui.category_id
+           WHERE ui.user_id = ?`,
+          [req.session.userId]
+        );
+
+        await Promise.all(
+          interestRows.slice(0, 3).map(async ({ slug }) => {
+            try {
+              const articles = await provider.getTopHeadlines({
+                category: slug,
+                pageSize: 10
+              });
+
+              await ingestBatch(articles, {
+                categorySlug: slug
+              });
+            } catch (e) {
+              console.error(
+                `Background ingestion failed for ${slug}:`,
+                e.message
+              );
+            }
+          })
+        );
+      } catch (e) {
+        console.error(
+          'Background personalized refresh failed:',
+          e.message
+        );
+      }
+    });
+
   } catch (err) {
     console.error('personalized feed error:', err);
-    res.status(500).json({ error: `Could not build personalized feed: ${safeMessage(err)}` });
+
+    res.status(500).json({
+      error: `Could not build personalized feed: ${safeMessage(err)}`
+    });
   }
 });
 
