@@ -1,7 +1,13 @@
 const db = require('../config/db');
 const { scoreLocationRelevance } = require('./locationMatcher');
 
-const WEIGHTS = { interest: 0.40, location: 0.25, recency: 0.15, source: 0.10, trending: 0.10 };
+const WEIGHTS = {
+  interest: 0.40,
+  location: 0.25,
+  recency: 0.15,
+  source: 0.10,
+  trending: 0.10
+};
 
 async function getUserContext(userId) {
   const [interestRows] = await db.query(
@@ -77,10 +83,22 @@ function scoreArticle(article, ctx, maxTrending) {
   };
 }
 
+function insertTopScore(top, item, limit) {
+  let low = 0;
+  let high = top.length;
+
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (top[mid].score >= item.score) low = mid + 1;
+    else high = mid;
+  }
+
+  top.splice(low, 0, item);
+  if (top.length > limit) top.pop();
+}
+
 async function getPersonalizedFeed(userId, { limit = 30 } = {}) {
   const ctx = await getUserContext(userId);
-
-  // Bounded candidate pool: for limit 30 this scores 180 candidates, not 400.
   const candidateLimit = Math.min(240, Math.max(limit * 6, 120));
 
   const [candidates] = await db.query(
@@ -99,29 +117,31 @@ async function getPersonalizedFeed(userId, { limit = 30 } = {}) {
     [candidateLimit]
   );
 
-  const maxTrending = candidates.reduce(
-    (m, a) => Math.max(m, Number(a.trending_score) || 0),
-    0
-  );
+  let maxTrending = 0;
+  for (const article of candidates) {
+    const value = Number(article.trending_score) || 0;
+    if (value > maxTrending) maxTrending = value;
+  }
 
-  const scored = candidates.map((a) => {
-    const categoryIds = (a.category_ids || '')
+  const top = [];
+  const topLimit = Math.min(limit, candidates.length);
+
+  for (const article of candidates) {
+    const categoryIds = (article.category_ids || '')
       .split(',')
       .filter(Boolean)
       .map(Number);
 
     const { total, breakdown } = scoreArticle(
-      { ...a, categoryIds },
+      { ...article, categoryIds },
       ctx,
       maxTrending
     );
 
-    return { article: a, score: total, breakdown };
-  });
+    insertTopScore(top, { article, score: total, breakdown }, topLimit);
+  }
 
-  scored.sort((a, b) => b.score - a.score);
-
-  return scored.slice(0, limit).map((s) => ({
+  return top.map((s) => ({
     ...formatArticle(s.article),
     personalizationScore: Number(s.score.toFixed(4)),
     scoreBreakdown: s.breakdown
