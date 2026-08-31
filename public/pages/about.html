@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+<main class="page-main">
+  <article class="prose">
+    <h1>About NewsHub</h1>
+    <p>NewsHub is a personalized, location-aware news reader. We believe a good front page should reflect two things: what you actually care about, and where you actually live — not just what's loudest that day.</p>
+    <h2>How personalization works</h2>
+    <p>Every story in your feed is scored using a transparent, rule-based system: interest match (40%), location relevance (25%), recency (15%), source preference (10%), and a trending signal (10%). No black-box models — just a formula you could compute yourself.</p>
+    <h2>Where the news comes from</h2>
+    <p>Headlines and search results are sourced through NewsAPI.org and a broad network of publishers, then normalized and indexed by NewsHub's own backend before they ever reach your feed.</p>
+    <h2>Our principles</h2>
+    <p>We store the minimum location data needed to localize your feed — typically just your city, state, and country — and we never sell your reading history.</p>
+  </article>
+</main>
+<div id="site-footer"></div>
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script>NewsHubChrome.init(null);</script>
+</body>
+</html>

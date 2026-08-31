@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<div class="search-hero">
+  <div class="container">
+    <h1 style="font-size:32px; margin-bottom:16px;">Search NewsHub</h1>
+    <div class="search-input-wrap">
+      ${''}
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style="position:absolute;left:16px;top:50%;transform:translateY(-50%);"><circle cx="9" cy="9" r="7" stroke="#58423c" stroke-width="1.6"/><path d="M19 19l-4.35-4.35" stroke="#58423c" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <input id="searchInput" type="search" placeholder="Search stories, topics, or sources…" autofocus>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:16px;" id="sortRow">
+      <button class="chip selected" data-sort="publishedAt">Newest</button>
+      <button class="chip" data-sort="relevancy">Most relevant</button>
+      <button class="chip" data-sort="popularity">Most popular</button>
+    </div>
+  </div>
+</div>
+
+<main class="page-main">
+  <div class="container" style="padding-top:32px;">
+    <div id="results"></div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+
+let sortBy = 'publishedAt';
+const input = document.getElementById('searchInput');
+const results = document.getElementById('results');
+let debounceTimer;
+
+const params = new URLSearchParams(location.search);
+if (params.get('q')) input.value = params.get('q');
+
+document.getElementById('sortRow').addEventListener('click', (e) => {
+  const btn = e.target.closest('.chip');
+  if (!btn) return;
+  document.querySelectorAll('#sortRow .chip').forEach(c => c.classList.remove('selected'));
+  btn.classList.add('selected');
+  sortBy = btn.dataset.sort;
+  if (input.value.trim()) runSearch(input.value.trim());
+});
+
+input.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  const q = input.value.trim();
+  if (!q) { results.innerHTML = ''; return; }
+  debounceTimer = setTimeout(() => runSearch(q), 450);
+});
+
+async function runSearch(q) {
+  history.replaceState(null, '', '?q=' + encodeURIComponent(q));
+  results.innerHTML = `<div class="center-loading"><div class="spinner"></div> Searching…</div>`;
+  try {
+    const data = await NewsHubAPI.searchNews(q, sortBy);
+    const articles = data.articles || [];
+    if (!articles.length) {
+      results.innerHTML = `<div class="empty-state"><h3>No results for "${NewsHubChrome.escapeHtml(q)}"</h3><p>Try a different keyword.</p></div>`;
+      return;
+    }
+    results.innerHTML = `<p style="color:var(--text-muted); margin-bottom:16px;">${articles.length} results</p><div class="grid-12">
+      ${articles.map(a => `<div style="grid-column: span 4;">
+        <article class="article-card">
+          <a href="${a.url}" target="_blank" rel="noopener" class="article-media">
+            ${a.imageUrl ? `<img src="${a.imageUrl}" alt="" loading="lazy">` : ''}
+          </a>
+          <div class="eyebrow accent">${NewsHubChrome.escapeHtml((a.source?.name||'NEWS').toUpperCase())}</div>
+          <a href="${a.url}" target="_blank" rel="noopener"><h3>${NewsHubChrome.escapeHtml(a.title)}</h3></a>
+          <p style="color:var(--text-muted); font-size:13px; margin:0;">${NewsHubChrome.timeAgo(a.publishedAt)}</p>
+        </article>
+      </div>`).join('')}
+    </div>`;
+  } catch (err) {
+    results.innerHTML = `<div class="empty-state"><h3>Search failed</h3><p>${NewsHubChrome.escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+if (input.value.trim()) runSearch(input.value.trim());
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NewsHub</title>
+<script src="/js/theme.js"></script>
+</head>
+<body style="background:var(--bg);display:flex;align-items:center;justify-content:center;height:100vh;">
+<div class="spinner"></div>
+<script src="/js/api.js"></script>
+<script>
+(async () => {
+  try {
+    const { user } = await NewsHubAPI.me();
+    if (user) {
+      window.location.replace(user.onboardingCompleted ? '/pages/home.html' : '/pages/onboarding-interests.html');
+    } else {
+      window.location.replace('/pages/signin.html');
+    }
+  } catch (e) {
+    window.location.replace('/pages/signin.html');
+  }
+})();
+</script>
+</body>
+</html>

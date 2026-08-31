@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="page-main">
+  <div class="container" style="padding-top:40px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h1 class="section-title" style="font-size:36px;">Local</h1>
+        <p style="color:var(--text-muted); margin-top:8px;" id="locSubtitle">Loading your location…</p>
+      </div>
+      <a href="/pages/profile.html" class="btn btn-secondary btn-sm">Change location</a>
+    </div>
+    <hr class="rule">
+    <div id="feed">
+      <div class="center-loading"><div class="spinner"></div> Finding stories near you…</div>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init('local');
+
+(async () => {
+  const user = await requireAuthOrRedirect();
+  if (!user) return;
+
+  const feed = document.getElementById('feed');
+  try {
+    const data = await NewsHubAPI.getLocalNews();
+    const loc = data.location;
+    document.getElementById('locSubtitle').textContent =
+      [loc.city, loc.state, loc.country].filter(Boolean).join(', ');
+
+    if (!data.articles.length) {
+      feed.innerHTML = `<div class="empty-state"><h3>No local stories found</h3><p>Try adjusting your location in Settings.</p></div>`;
+      return;
+    }
+
+    feed.innerHTML = `<div class="grid-12">
+      ${data.articles.map(a => `<div style="grid-column: span 4;">
+        <article class="article-card">
+          <a href="${a.url}" target="_blank" rel="noopener" class="article-media">
+            ${a.imageUrl ? `<img src="${a.imageUrl}" alt="" loading="lazy">` : ''}
+          </a>
+          <span class="badge" style="align-self:flex-start;">${a._rel.tier}</span>
+          <a href="${a.url}" target="_blank" rel="noopener"><h3>${NewsHubChrome.escapeHtml(a.title)}</h3></a>
+          <p style="color:var(--text-muted); font-size:13px; margin:0;">${NewsHubChrome.escapeHtml(a.source?.name || '')} • ${NewsHubChrome.timeAgo(a.publishedAt)}</p>
+        </article>
+      </div>`).join('')}
+    </div>`;
+  } catch (err) {
+    feed.innerHTML = `<div class="empty-state"><h3>Couldn't load local news</h3><p>${NewsHubChrome.escapeHtml(err.message)}</p></div>`;
+  }
+})();
+</script>
+</body>
+</html>

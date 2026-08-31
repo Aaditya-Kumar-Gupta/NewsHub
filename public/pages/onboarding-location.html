@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Set your location — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="onboard-shell">
+  <div class="onboard-progress">
+    <div class="step done"></div>
+    <div class="step done"></div>
+    <div class="step"></div>
+  </div>
+  <h1>Where should we localize your news?</h1>
+  <p class="lede">We use your city and country to surface locally relevant stories. We never store your exact GPS coordinates.</p>
+
+  <div id="formAlert" class="form-alert" style="display:none;"></div>
+
+  <button type="button" class="btn btn-secondary" id="useCurrentBtn" style="margin-bottom:24px;">
+    📍 Use current location
+  </button>
+
+  <form id="locationForm">
+    <div class="field">
+      <label for="country">Country</label>
+      <select id="country" required></select>
+    </div>
+    <div class="field">
+      <label for="state">State / Region</label>
+      <input id="state" type="text" placeholder="e.g. Karnataka">
+    </div>
+    <div class="field">
+      <label for="city">City</label>
+      <input id="city" type="text" placeholder="e.g. Bengaluru" required>
+    </div>
+    <input type="hidden" id="lat">
+    <input type="hidden" id="lng">
+  </form>
+
+  <div class="onboard-actions">
+    <a href="/pages/onboarding-interests.html" class="btn btn-ghost">Back</a>
+    <button class="btn btn-primary" id="continueBtn">Continue</button>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+const isEdit = new URLSearchParams(location.search).get('edit') === '1';
+if (isEdit) document.querySelector('.onboard-progress').style.display = 'none';
+
+const COUNTRIES = [
+  { name: 'India', code: 'IN' }, { name: 'United States', code: 'US' },
+  { name: 'United Kingdom', code: 'GB' }, { name: 'Canada', code: 'CA' },
+  { name: 'Australia', code: 'AU' }, { name: 'Germany', code: 'DE' },
+  { name: 'France', code: 'FR' }, { name: 'Japan', code: 'JP' },
+  { name: 'Brazil', code: 'BR' }, { name: 'South Africa', code: 'ZA' },
+  { name: 'Singapore', code: 'SG' }, { name: 'United Arab Emirates', code: 'AE' }
+];
+
+const countrySelect = document.getElementById('country');
+countrySelect.innerHTML = COUNTRIES.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+
+(async () => {
+  const user = await requireAuthOrRedirect();
+  if (!user) return;
+  if (isEdit) {
+    try {
+      const profile = await NewsHubAPI.getProfile();
+      if (profile.preferences.country_code) countrySelect.value = profile.preferences.country_code;
+      document.getElementById('state').value = profile.preferences.state || '';
+      document.getElementById('city').value = profile.preferences.city || '';
+    } catch (e) {}
+  }
+})();
+
+document.getElementById('useCurrentBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('useCurrentBtn');
+  if (!navigator.geolocation) {
+    NewsHubChrome.toast('Geolocation is not supported by your browser');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Locating…';
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    document.getElementById('lat').value = latitude;
+    document.getElementById('lng').value = longitude;
+    try {
+      // Client-side reverse geocoding (no API key required) — used only
+      // to fill in city/state/country labels; NewsHub itself only ever
+      // stores rounded, city-level coordinates, never precise device GPS.
+      const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+      const data = await res.json();
+      if (data.countryCode) {
+        countrySelect.value = data.countryCode;
+      }
+      document.getElementById('state').value = data.principalSubdivision || '';
+      document.getElementById('city').value = data.city || data.locality || '';
+      NewsHubChrome.toast('Location detected');
+    } catch (e) {
+      NewsHubChrome.toast('Could not detect city — please enter it manually');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📍 Use current location';
+    }
+  }, () => {
+    NewsHubChrome.toast('Location permission denied');
+    btn.disabled = false;
+    btn.textContent = '📍 Use current location';
+  });
+});
+
+document.getElementById('continueBtn').addEventListener('click', async () => {
+  const alertBox = document.getElementById('formAlert');
+  const city = document.getElementById('city').value.trim();
+  if (!city) {
+    alertBox.textContent = 'Please enter a city.';
+    alertBox.style.display = 'block';
+    return;
+  }
+  const countryOption = countrySelect.options[countrySelect.selectedIndex];
+  const btn = document.getElementById('continueBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const payload = {
+    country: countryOption.textContent,
+    countryCode: countryOption.value,
+    state: document.getElementById('state').value.trim() || null,
+    city,
+    latitude: document.getElementById('lat').value ? Number(document.getElementById('lat').value) : null,
+    longitude: document.getElementById('lng').value ? Number(document.getElementById('lng').value) : null
+  };
+  try {
+    if (isEdit) {
+      await NewsHubAPI.updateLocation(payload);
+      window.location.href = '/pages/profile.html';
+    } else {
+      await NewsHubAPI.saveOnboardingLocation(payload);
+      window.location.href = '/pages/onboarding-build.html';
+    }
+  } catch (err) {
+    alertBox.textContent = err.message;
+    alertBox.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+  }
+});
+</script>
+</body>
+</html>

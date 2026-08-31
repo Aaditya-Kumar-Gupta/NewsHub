@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+<main class="page-main">
+  <div class="prose" style="text-align:center;">
+    <h1>Contact Us</h1>
+    <p>Have feedback, a correction, or a partnership question? Send us a note.</p>
+  </div>
+  <form class="contact-form card" id="contactForm">
+    <div id="contactAlert" class="form-alert success" style="display:none;">Thanks — we'll get back to you soon.</div>
+    <div class="field">
+      <label for="cName">Name</label>
+      <input id="cName" required>
+    </div>
+    <div class="field">
+      <label for="cEmail">Email</label>
+      <input id="cEmail" type="email" required>
+    </div>
+    <div class="field">
+      <label for="cMessage">Message</label>
+      <textarea id="cMessage" rows="5" required style="width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:2px; background:var(--bg); color:var(--text);"></textarea>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">Send message</button>
+  </form>
+</main>
+<div id="site-footer"></div>
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script>
+NewsHubChrome.init(null);
+document.getElementById('contactForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  document.getElementById('contactAlert').style.display = 'block';
+  e.target.reset();
+});
+</script>
+</body>
+</html>

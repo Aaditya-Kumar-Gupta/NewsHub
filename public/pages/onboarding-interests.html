@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Choose your interests — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="onboard-shell">
+  <div class="onboard-progress">
+    <div class="step done"></div>
+    <div class="step"></div>
+    <div class="step"></div>
+  </div>
+  <h1>What do you want to follow?</h1>
+  <p class="lede">Pick a few topics you care about. You can change these any time in Settings.</p>
+
+  <div id="formAlert" class="form-alert" style="display:none;"></div>
+  <div class="interest-grid" id="interestGrid">
+    <div class="center-loading"><div class="spinner"></div> Loading topics…</div>
+  </div>
+
+  <div class="onboard-actions">
+    <span style="color:var(--text-muted);font-size:13px;" id="selectedCount">0 selected</span>
+    <button class="btn btn-primary" id="continueBtn" disabled>Continue</button>
+  </div>
+  <p id="skipBackLink" style="display:none; text-align:center; margin-top:16px;"><a href="/pages/profile.html" style="color:var(--text-muted); font-size:13px;">Cancel</a></p>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+let selected = new Set();
+const isEdit = new URLSearchParams(location.search).get('edit') === '1';
+if (isEdit) {
+  document.getElementById('skipBackLink').style.display = 'block';
+  document.querySelector('.onboard-progress').style.display = 'none';
+}
+
+(async () => {
+  const user = await requireAuthOrRedirect();
+  if (!user) return;
+
+  try {
+    const { categories } = await NewsHubAPI.getCategories();
+    let existingIds = [];
+    if (isEdit) {
+      try {
+        const profile = await NewsHubAPI.getProfile();
+        existingIds = profile.interests.map(i => i.id);
+      } catch (e) {}
+    }
+    const grid = document.getElementById('interestGrid');
+    grid.innerHTML = categories.map(c => `
+      <button type="button" class="chip${existingIds.includes(c.id) ? ' selected' : ''}" data-id="${c.id}">
+        <span>${c.name}</span>
+      </button>`).join('');
+    existingIds.forEach(id => selected.add(id));
+    document.getElementById('selectedCount').textContent = `${selected.size} selected`;
+    document.getElementById('continueBtn').disabled = selected.size === 0;
+
+    grid.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const id = Number(chip.dataset.id);
+        if (selected.has(id)) { selected.delete(id); chip.classList.remove('selected'); }
+        else { selected.add(id); chip.classList.add('selected'); }
+        document.getElementById('selectedCount').textContent = `${selected.size} selected`;
+        document.getElementById('continueBtn').disabled = selected.size === 0;
+      });
+    });
+  } catch (err) {
+    document.getElementById('formAlert').textContent = err.message;
+    document.getElementById('formAlert').style.display = 'block';
+  }
+})();
+
+document.getElementById('continueBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('continueBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    if (isEdit) {
+      await NewsHubAPI.updateInterests(Array.from(selected));
+      window.location.href = '/pages/profile.html';
+    } else {
+      await NewsHubAPI.saveInterests(Array.from(selected));
+      window.location.href = '/pages/onboarding-location.html';
+    }
+  } catch (err) {
+    const alertBox = document.getElementById('formAlert');
+    alertBox.textContent = err.message;
+    alertBox.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+<main class="page-main">
+  <article class="prose">
+    <h1>Privacy Policy</h1>
+    <p>Last updated: August 2026. This policy explains what NewsHub collects and why.</p>
+    <h2>What we store</h2>
+    <p>Your name, email, and a securely hashed password. We never store your password in plain text. We also store the interests, sources, and city/state/country you choose during onboarding.</p>
+    <h2>Location data</h2>
+    <p>We only store city-level location — never your exact device GPS coordinates — even when you use "current location," which is snapped to roughly 1km precision before it's saved.</p>
+    <h2>Reading activity</h2>
+    <p>We keep a record of articles you've read and saved so we can show you your history and power your personalized feed. You can clear this at any time from your profile.</p>
+    <h2>Third parties</h2>
+    <p>Headlines are retrieved from NewsAPI.org through our own servers — your browser never contacts NewsAPI directly, and your account credentials are never shared with it.</p>
+    <h2>Your controls</h2>
+    <p>You can update your interests, location, and theme at any time, and you can permanently delete your account and all associated data from the Profile page.</p>
+  </article>
+</main>
+<div id="site-footer"></div>
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script>NewsHubChrome.init(null);</script>
+</body>
+</html>

@@ -1,131 +1,69 @@
-# 🌟 NewsHUB: Unveiling Latest News Update 🌟
+# NewsHub
 
-NewsHUB is a modern, real-time news aggregation platform designed to transform digital news consumption. With personalized recommendations, an intuitive interface, and robust security, NewsHUB ensures you stay updated on the latest developments across the globe effortlessly.
+A location-aware, personalized news web app built with **vanilla HTML/CSS/JS** on the frontend and **Node.js + Express + MySQL** on the backend — no frontend frameworks, no ORMs, no TypeScript.
 
----
+Design is grounded in the supplied Figma file (editorial serif headlines, warm terracotta/cream palette, teal accents).
 
-## ✨ Features
+## Architecture
 
-- **📡 Real-Time Updates**: Access the latest news from trusted sources instantly.
-- **🔍 Advanced Search**: Filter and find articles by date, category, or relevance.
-- **🎨 Interactive News Cards**: Engaging visuals for a delightful reading experience.
-- **💡 Personalization**: Tailored recommendations based on your preferences.
-- **🔒 Secure Access**: Encrypted login and registration to protect your data.
-- **🌐 Accessibility**: WCAG-compliant design for inclusive usage.
-- **🌍 Multilingual Support**: Available in multiple languages to reach a global audience.
+```
+Browser (public/) — plain HTML/CSS/JS, talks only to same-origin /api/*
+        │
+Express API (server/)
+        │
+  ┌─────┴──────────────────────────────┐
+  │                                     │
+MySQL (users, articles, prefs, ...)   NewsProvider (abstract)
+                                         │
+                                   NewsAPIProvider
+                                         │
+                                     NewsAPI.org
+```
 
----
+- `server/services/NewsProvider.js` — abstract interface (`getTopHeadlines`, `search`, `getSources`).
+- `server/services/NewsAPIProvider.js` — the only file that knows about NewsAPI.org's REST shape, auth header, and endpoint mapping. Also implements `getByLocation()` (NewsAPI has no such endpoint, so this searches `/v2/everything` for the place name and falls back to `/v2/top-headlines?country=`).
+- `server/services/personalizationEngine.js` — rule-based scoring: Interest match 40%, Location relevance 25%, Recency 15%, Source preference 10%, Trending 10%.
+- `server/services/locationMatcher.js` — reusable city/state/country relevance scoring, used by both `/api/news/local` and the personalization engine.
+- `server/services/ingestionService.js` — normalizes and **deduplicates** provider articles into MySQL via a SHA-256 hash of the article URL (unique key `url_hash`).
+- The browser **never** calls NewsAPI.org directly and the `NEWS_API_KEY` never leaves the server.
 
-## 🛠️ Tech Stack
+## Setup
 
-### **Frontend**
-- HTML5, CSS3, JavaScript (Interactive and responsive design)
+### 1. Install dependencies
+```bash
+npm install
+```
 
-### **Backend**
-- PHP (Dynamic content generation)  
-- MySQL (Data storage and retrieval)
+### 2. Configure environment
+```bash
+cp .env.example .env
+# edit .env: MySQL credentials + your NewsAPI.org key (https://newsapi.org)
+```
 
-### **APIs**
-- Integrated with News APIs for real-time updates.
+### 3. Create the database schema
+```bash
+npm run db:init
+```
+This connects to MySQL and runs `sql/schema.sql`, which creates the `newshub` database, all tables (users, locations, user_preferences, categories, sources, articles, article_categories, user_interests, user_sources, saved_articles, reading_history, sessions), and seeds the 11 interest categories.
 
-### **Development Tools**
-- VS Code.
+### 4. Run the server
+```bash
+npm start
+```
+Visit `http://localhost:3000`.
 
----
+## User flow implemented
 
-## 🚀 Getting Started
+- **New user:** Sign Up → Preference Selection (interests) → Location Selection → Build My NewsHub → Home/Discover
+- **Existing user:** Sign In → Home/Discover
+- **Main nav:** Home, For You, Local, Topics, Search, Profile
+- **Supporting nav:** About, Archives, Privacy, Terms, Contact
+- **Article navigation:** any article → Article Detail → related story → another Article Detail; Saved → Article Detail; Archives → Article Detail
 
-### 📋 Prerequisites
+## Notes on scope
 
-Ensure you have the following installed:
-- A web server (e.g., Apache)
-- PHP 7.4 or higher
-- MySQL 5.7 or higher
+This is a complete, runnable full-stack implementation of every required page and API surface. A couple of pragmatic choices worth knowing about:
 
-### 🖥️ Installation Steps
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Cody-aditya/NewsHub.git
-   cd newshub
-   ```
-2. Set up the database:
-   - Import the `database.sql` file into your MySQL instance.
-
-3. Configure environment variables:
-   - Update database credentials and API keys in the `.env` file.
-
-4. Start the server:
-   - Launch your web server and navigate to `http://localhost/NewsHub`.
-
----
-
-## 📸 Screenshots
-
-- 🔐 **Login Page**
-- 🏠 **Home Page**
-- 🔎 **Search Results**
-
----
-
-## 🎥 Demo
-
-Check out our live demo: [NewsHUB Demo]
-
-https://github.com/user-attachments/assets/8727c675-f7aa-4a69-86d3-0602214aa3cf
-
-
-
----
-
-## 🛡️ Security & Privacy
-
-NewsHUB prioritizes user security:
-
-- HTTPS encryption for all data transmissions.
-- Compliant with GDPR and CCPA standards.
-- Secure user authentication and authorization mechanisms.
-
----
-
-## 🔮 Future Enhancements
-
-- Transition to a paid API for higher reliability and faster updates.
-- Multimedia Integration: Add support for videos, podcasts, and infographics.
-- Enhanced accessibility features for a broader audience.
-- Expand language support to include more global languages.
-
----
-
-## 👥 Contributors
-
-- [Aditya Kumar Gupta](https://github.com/Cody-aditya)  
-- [Rishabh Bhardwaj](https://github.com/rishu-bhardwajjj)  
-- [Shobhit Sharma](https://github.com/ShobhitxSharma)
-- [Pratik](https://github.com/PratikXPramanik)  
-- [Abhi Grover](https://github.com/abhigrover12)
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions from the community! Feel free to:
-
-- Submit bug reports and feature requests.
-- Fork the repository and submit a pull request with your improvements.
-
----
-
-## ⭐ Acknowledgments
-
-We thank our mentors, peers, and the open-source community for their guidance and support in making NewsHUB a reality.
-
----
-
-## [![GitHub contributors](https://img.shields.io/github/contributors/Cody-aditya/NewsHub)](https://github.com/Cody-aditya/NewsHub/graphs/contributors)
+- Reverse-geocoding for "Use current location" during onboarding calls a free, keyless client-side geocoding API (`bigdatacloud.net`) purely to turn lat/lng into a city/state/country label — this is unrelated to the NewsAPI key rule (which only concerns NewsAPI.org) and never touches the server. Only city-level, rounded coordinates are ever persisted.
+- The personalization engine scores against whatever has already been ingested into MySQL (via prior headline/search/local calls). In a production deployment you'd add a scheduled job calling `ingestionService` on a cron to keep the candidate pool fresh continuously; the hook points for that are in `server/services/ingestionService.js`.
+- The 36 Figma frames map onto ~13 distinct page templates (desktop/mobile/state variants of the same designs); this build implements one responsive template per page rather than 36 separate static screens, per the brief's own instruction that "Figma mobile screens are references for responsive behavior," not separate pages.
