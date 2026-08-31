@@ -79,41 +79,117 @@ router.get('/sources', async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// GET /api/news/local (protected) — uses the user's stored location
-// NewsProvider.getByLocation() applies the NewsAPI keyword-search
-// workaround internally; this route just calls the abstraction.
+// Local-news cache helpers
+// ---------------------------------------------------------
+async function getUserLocation(userId) {
+  const [[prefs]] = await db.query(
+    `SELECT l.city, l.state, l.country, l.country_code
+     FROM user_preferences up
+     JOIN locations l ON l.id = up.location_id
+     WHERE up.user_id = ?`,
+    [userId]
+  );
+  return prefs || null;
+}
+
+async function getCachedLocalArticles(prefs, limit = 24) {
+  const locationTags = [...new Set(
+    [prefs.city, prefs.state, prefs.country].filter(Boolean)
+  )];
+
+  if (!locationTags.length) return [];
+
+  const [rows] = await db.query(
+    `SELECT a.*, s.name AS source_name, s.logo_url AS source_logo
+     FROM articles a
+     LEFT JOIN sources s ON s.id = a.source_id
+     WHERE a.location_tag IN (?)
+       AND (a.published_at >= (NOW() - INTERVAL 7 DAY)
+            OR a.published_at IS NULL)
+     ORDER BY a.published_at DESC
+     LIMIT ?`,
+    [locationTags, limit]
+  );
+
+  return rows;
+}
+
+function rankLocalArticles(rows, prefs) {
+  return rows
+    .map((row) => {
+      const article = formatArticle(row);
+      const relevance = scoreLocationRelevance(prefs, {
+        locationTag: row.location_tag,
+        countryCode: row.country_code,
+        title: row.title,
+        description: row.description
+      });
+      return { ...article, _rel: relevance };
+    })
+    .sort((a, b) => b._rel.score - a._rel.score);
+}
+
+async function refreshLocalPool(prefs) {
+  const articles = await provider.getByLocation({
+    city: prefs.city,
+    state: prefs.state,
+    country: prefs.country,
+    countryCode: prefs.country_code,
+    pageSize: 24
+  });
+
+  if (articles.length) {
+    await ingestBatch(articles, {
+      locationTag: prefs.city || prefs.state || prefs.country
+    });
+  }
+}
+
+// ---------------------------------------------------------
+// GET /api/news/local (protected)
+// Fast path: return cached MySQL stories immediately.
+// Background path: refresh NewsAPI after the response.
 // ---------------------------------------------------------
 router.get('/local', requireAuth, async (req, res) => {
   try {
-    const [[prefs]] = await db.query(
-      `SELECT l.city, l.state, l.country, l.country_code
-       FROM user_preferences up JOIN locations l ON l.id = up.location_id
-       WHERE up.user_id = ?`,
-      [req.session.userId]
-    );
+    const prefs = await getUserLocation(req.session.userId);
 
     if (!prefs) {
-      return res.status(400).json({ error: 'No location set yet. Please complete onboarding or set a location in your profile.' });
+      return res.status(400).json({
+        error: 'No location set yet. Please complete onboarding or set a location in your profile.'
+      });
     }
 
-    const articles = await provider.getByLocation({
-      city: prefs.city,
-      state: prefs.state,
-      country: prefs.country,
-      countryCode: prefs.country_code,
-      pageSize: 24
+    const cachedRows = await getCachedLocalArticles(prefs);
+
+    if (cachedRows.length > 0) {
+      res.json({
+        location: prefs,
+        articles: rankLocalArticles(cachedRows, prefs)
+      });
+
+      setImmediate(() => {
+        refreshLocalPool(prefs).catch((err) => {
+          console.error('Background local refresh failed:', err.message);
+        });
+      });
+
+      return;
+    }
+
+    // Cold-cache fallback for a new location.
+    await refreshLocalPool(prefs);
+    const freshRows = await getCachedLocalArticles(prefs);
+
+    res.json({
+      location: prefs,
+      articles: rankLocalArticles(freshRows, prefs)
     });
-    await ingestBatch(articles, { locationTag: prefs.city || prefs.state || prefs.country });
-
-    // Rank using the reusable location matcher
-    const ranked = articles
-      .map((a) => ({ ...a, _rel: scoreLocationRelevance(prefs, { title: a.title, description: a.description, countryCode: a.countryCode }) }))
-      .sort((a, b) => b._rel.score - a._rel.score);
-
-    res.json({ location: prefs, articles: ranked });
   } catch (err) {
     console.error('local news error:', err);
-    res.status(502).json({ error: `Could not fetch local news: ${safeMessage(err)}` });
+    res.status(502).json({
+      error: `Could not fetch local news: ${safeMessage(err)}`
+    });
   }
 });
 // ---------------------------------------------------------
