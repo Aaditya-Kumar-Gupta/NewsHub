@@ -4,6 +4,16 @@
 
 ---
 
+# 🌐 Live Website
+
+Experience the live NewsHUB application:
+
+👉 **[NewsHub-v2](https://newshub-z730.onrender.com/pages/home.html)**
+
+> 🚀 NewsHUB is currently deployed on Render.
+
+---
+
 # 📌 NewsHUB V2.0
 
 ## 🌟 Release Overview
@@ -1061,6 +1071,24 @@ We would like to recognize everyone who has contributed to the NewsHUB project t
   <img src="https://contrib.rocks/image?repo=Aaditya-Kumar-Gupta/NewsHub" alt="NewsHUB GitHub Contributors" />
 </a>
 
+### 👥 Project Contributors
+
+We’re grateful to our contributors who have supported the development and improvement of NewsHUB.
+
+<a href="https://github.com/rishu-bhardwajjj">
+  <img src="https://github.com/rishu-bhardwajjj.png" width="60" height="60" alt="Rishabh Bhardwaj" />
+</a>
+<a href="https://github.com/abhigrover12">
+  <img src="https://github.com/abhigrover12.png" width="60" height="60" alt="Abhi Grover" />
+</a>
+<a href="https://github.com/PratikXPramanik">
+  <img src="https://github.com/PratikXPramanik.png" width="60" height="60" alt="Pratik" />
+</a>
+<a href="https://github.com/ShobhitxSharma">
+  <img src="https://github.com/ShobhitxSharma.png" width="60" height="60" alt="Shobhit Sharma" />
+</a>
+
+> 💙 Thank you to everyone who has contributed code, ideas, feedback, testing, and improvements to NewsHUB.
 ---
 
 ### 📊 GitHub Contributors
