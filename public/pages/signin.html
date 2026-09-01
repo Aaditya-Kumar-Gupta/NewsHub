@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+<div id="site-header"></div>
+
+<main id="main" class="auth-shell">
+  <div class="auth-card">
+    <h1>Welcome back</h1>
+    <p class="lede">Sign in to your NewsHub account.</p>
+
+    <div id="formAlert" class="form-alert" style="display:none;"></div>
+
+    <form id="signinForm" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit" id="submitBtn">Sign in</button>
+    </form>
+
+    <p class="auth-switch">New to NewsHub? <a href="/pages/signup.html">Create an account</a></p>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+redirectIfAuthed();
+
+const form = document.getElementById('signinForm');
+const alertBox = document.getElementById('formAlert');
+const submitBtn = document.getElementById('submitBtn');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  alertBox.style.display = 'none';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in…';
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  try {
+    const { user } = await NewsHubAPI.signIn({ email, password });
+    const params = new URLSearchParams(location.search);
+    const next = params.get('next');
+    window.location.href = user.onboardingCompleted ? (next || '/pages/home.html') : '/pages/onboarding-interests.html';
+  } catch (err) {
+    alertBox.textContent = err.message;
+    alertBox.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign in';
+  }
+});
+</script>
+</body>
+</html>

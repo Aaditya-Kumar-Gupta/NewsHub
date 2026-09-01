@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archives — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+<main class="page-main">
+  <div class="container" style="padding-top:40px;">
+    <h1 class="section-title" style="font-size:36px;">Archives</h1>
+    <p style="color:var(--text-muted); margin: 8px 0 24px;">Browse previously ingested stories by date or category.</p>
+
+    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:24px;">
+      <div class="field" style="margin:0;">
+        <label for="dateFilter">Date</label>
+        <input type="date" id="dateFilter">
+      </div>
+      <div class="field" style="margin:0;">
+        <label for="catFilter">Category</label>
+        <select id="catFilter"><option value="">All</option></select>
+      </div>
+      <button class="btn btn-secondary" id="filterBtn">Apply filters</button>
+    </div>
+
+    <hr class="rule">
+    <div id="feed">
+      <div class="center-loading"><div class="spinner"></div> Loading archives…</div>
+    </div>
+  </div>
+</main>
+<div id="site-footer"></div>
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+
+async function loadArchives() {
+  const feed = document.getElementById('feed');
+  feed.innerHTML = `<div class="center-loading"><div class="spinner"></div> Loading…</div>`;
+  const date = document.getElementById('dateFilter').value;
+  const category = document.getElementById('catFilter').value;
+  try {
+    const { articles } = await NewsHubAPI.getArchives({ date, category });
+    if (!articles.length) {
+      feed.innerHTML = `<div class="empty-state"><h3>No archived stories match those filters</h3><p>Browse Home or Topics to generate more archive entries.</p></div>`;
+      return;
+    }
+    feed.innerHTML = `<div class="grid-12">
+      ${articles.map(a => `<div style="grid-column: span 4;">
+        <article class="article-card">
+          <a href="/pages/article.html?id=${a.id}" class="article-media">
+            ${a.image_url ? `<img src="${a.image_url}" alt="" loading="lazy">` : ''}
+          </a>
+          <div class="eyebrow accent">${NewsHubChrome.escapeHtml((a.source_name||'NEWS').toUpperCase())}</div>
+          <a href="/pages/article.html?id=${a.id}"><h3>${NewsHubChrome.escapeHtml(a.title)}</h3></a>
+          <p style="color:var(--text-muted); font-size:13px; margin:0;">${NewsHubChrome.timeAgo(a.published_at)}</p>
+        </article>
+      </div>`).join('')}
+    </div>`;
+  } catch (err) {
+    feed.innerHTML = `<div class="empty-state"><h3>Couldn't load archives</h3><p>${NewsHubChrome.escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+(async () => {
+  try {
+    const { categories } = await NewsHubAPI.getNewsCategories();
+    document.getElementById('catFilter').innerHTML += categories.map(c => `<option value="${c.slug}">${c.name}</option>`).join('');
+  } catch (e) {}
+  loadArchives();
+})();
+
+document.getElementById('filterBtn').addEventListener('click', loadArchives);
+</script>
+</body>
+</html>

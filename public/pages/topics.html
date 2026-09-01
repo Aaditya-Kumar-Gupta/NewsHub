@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Topics — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="page-main">
+  <div class="container" style="padding-top:40px;">
+    <h1 class="section-title" style="font-size:36px;">Topics</h1>
+    <p style="color:var(--text-muted); margin: 8px 0 24px;">Browse headlines by category.</p>
+
+    <div class="interest-grid" id="categoryChips"></div>
+    <hr class="rule">
+    <div id="feed">
+      <div class="center-loading"><div class="spinner"></div> Loading headlines…</div>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init('topics');
+
+const NEWSAPI_CATEGORIES = ['general','business','technology','science','health','sports','entertainment'];
+
+async function loadCategory(slug, chipEl) {
+  document.querySelectorAll('#categoryChips .chip').forEach(c => c.classList.remove('selected'));
+  if (chipEl) chipEl.classList.add('selected');
+
+  const feed = document.getElementById('feed');
+  feed.innerHTML = `<div class="center-loading"><div class="spinner"></div> Loading ${slug}…</div>`;
+  try {
+    const { articles } = await NewsHubAPI.getHeadlines({ category: slug, country: 'us' });
+    if (!articles.length) {
+      feed.innerHTML = `<div class="empty-state"><h3>No stories found</h3><p>Try a different topic.</p></div>`;
+      return;
+    }
+    feed.innerHTML = `<div class="grid-12">
+      ${articles.map(a => `<div style="grid-column: span 4;">
+        <article class="article-card">
+          <a href="${a.url}" target="_blank" rel="noopener" class="article-media">
+            ${a.imageUrl ? `<img src="${a.imageUrl}" alt="" loading="lazy">` : ''}
+          </a>
+          <div class="eyebrow accent">${slug.toUpperCase()}</div>
+          <a href="${a.url}" target="_blank" rel="noopener"><h3>${NewsHubChrome.escapeHtml(a.title)}</h3></a>
+          <p style="color:var(--text-muted); font-size:13px; margin:0;">${NewsHubChrome.escapeHtml(a.source?.name || '')} • ${NewsHubChrome.timeAgo(a.publishedAt)}</p>
+        </article>
+      </div>`).join('')}
+    </div>`;
+  } catch (err) {
+    feed.innerHTML = `<div class="empty-state"><h3>Couldn't load this topic</h3><p>${NewsHubChrome.escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+(async () => {
+  const chipsEl = document.getElementById('categoryChips');
+  chipsEl.innerHTML = NEWSAPI_CATEGORIES.map(c => `<button class="chip" data-slug="${c}">${c[0].toUpperCase()+c.slice(1)}</button>`).join('');
+  chipsEl.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => loadCategory(chip.dataset.slug, chip));
+  });
+  loadCategory('general', chipsEl.querySelector('.chip'));
+})();
+</script>
+</body>
+</html>

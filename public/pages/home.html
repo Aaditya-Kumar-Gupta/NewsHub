@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NewsHub — Home &amp; Discover</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+<div id="site-header"></div>
+<div class="context-strip"><div class="container"><span class="eyebrow" id="contextStrip">PERSONALIZED NEWS</span></div></div>
+<main id="main" class="page-main">
+  <div class="container" style="padding-top:32px;">
+    <div class="grid-12">
+      <div style="grid-column: span 8;" id="leftColumn"><div class="center-loading"><div class="spinner"></div> Loading your front page…</div></div>
+      <div style="grid-column: span 4;" id="rightColumn"></div>
+    </div>
+  </div>
+</main>
+<div id="site-footer"></div>
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init('home');
+
+function dateLine() {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric'
+  }).toUpperCase();
+}
+
+async function loadLocalFocus(user, profile) {
+  if (!user || !profile?.preferences?.city) return;
+  try {
+    const local = await NewsHubAPI.getLocalNews();
+    const box = document.getElementById('localFocusBox');
+    if (!box) return;
+    box.innerHTML = `
+      <div class="local-focus">
+        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:9px; margin-bottom:8px;">
+          <h3 style="font-size:24px;">Local Focus</h3>
+          <span class="badge">${NewsHubChrome.escapeHtml(local.location.city || local.location.country)}</span>
+        </div>
+        ${local.articles.slice(0, 2).map(a => `
+          <div class="local-focus-item">
+            <h4><a href="${a.url}" target="_blank" rel="noopener">${NewsHubChrome.escapeHtml(a.title)}</a></h4>
+            <div class="thumb">${a.imageUrl ? `<img src="${a.imageUrl}" alt="" loading="lazy">` : ''}</div>
+          </div>
+        `).join('')}
+      </div>`;
+  } catch (e) {
+    console.warn('Local Focus unavailable:', e.message);
+  }
+}
+
+async function loadHome() {
+  const left = document.getElementById('leftColumn');
+  const right = document.getElementById('rightColumn');
+
+  try {
+    const { user } = await NewsHubAPI.me();
+
+    let profile = null;
+    let personalizedResult = { articles: [] };
+
+    if (user) {
+      [profile, personalizedResult] = await Promise.all([
+        NewsHubAPI.getProfile().catch(() => null),
+        NewsHubAPI.getPersonalized().catch(() => ({ articles: [] }))
+      ]);
+    }
+
+    const locLabel = profile?.preferences?.city
+      ? `${profile.preferences.city.toUpperCase()}, ${profile.preferences.country?.toUpperCase() || ''}`
+      : 'GLOBAL EDITION';
+
+    document.getElementById('contextStrip').textContent =
+      `${locLabel} • ${dateLine()} • PERSONALIZED NEWS`;
+
+    let articles = user ? (personalizedResult?.articles || []) : [];
+
+    if (!articles.length) {
+      try {
+        const res = await NewsHubAPI.getHeadlines({ country: 'us' });
+        articles = (res.articles || []).map((a, i) => ({
+          ...a, id: a.id || `tmp-${i}`
+        }));
+      } catch (e) {
+        articles = [];
+      }
+    }
+
+    if (!articles.length) {
+      left.innerHTML = '<div class="empty-state"><h3>No stories yet</h3><p>Check back soon, or try Search to find something specific.</p></div>';
+      return;
+    }
+
+    const [leadArticle, ...secondaries] = articles;
+
+    left.innerHTML = `
+      ${ArticleCards.lead(leadArticle)}
+      <hr class="rule">
+      <div style="display:flex; gap:24px; flex-wrap:wrap;">
+        ${secondaries.slice(0, 2).map(ArticleCards.secondary).join('')}
+      </div>
+      <hr class="rule">
+      <div class="grid-12" style="margin-top:8px;">
+        ${secondaries.slice(2, 8).map(a => `<div style="grid-column: span 4;">${ArticleCards.compact(a)}</div>`).join('')}
+      </div>`;
+
+    const trending = [...articles]
+      .sort((a, b) => (b.trendingScore || 0) - (a.trendingScore || 0))
+      .slice(0, 4);
+
+    right.innerHTML = `
+      <div>
+        <div style="display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); padding-bottom:17px; margin-bottom:16px;">
+          <span style="color:var(--accent);">▲</span>
+          <h3 style="font-size:24px;">Trending Now</h3>
+        </div>
+        <ol class="trending-list">
+          ${trending.map((a, i) => ArticleCards.trendingItem(a, i + 1)).join('')}
+        </ol>
+      </div>
+      <div style="margin-top:32px;" id="localFocusBox"></div>`;
+
+    ArticleCards.bindSaveButtons(left);
+    ArticleCards.bindSaveButtons(right);
+
+    // Secondary request: never block the main feed.
+    void loadLocalFocus(user, profile);
+
+  } catch (err) {
+    left.innerHTML = `<div class="empty-state"><h3>Couldn't load your feed</h3><p>${NewsHubChrome.escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+loadHome();
+</script>
+</body>
+</html>

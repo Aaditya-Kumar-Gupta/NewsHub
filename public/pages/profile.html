@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your NewsHub — Profile &amp; Preferences</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="page-main">
+  <div class="container" style="padding-top:32px; padding-bottom:64px;">
+    <h1 style="font-size:44px;">Your NewsHub.</h1>
+    <div class="utility-row" style="margin-top:8px; margin-bottom:32px; flex-wrap:wrap; gap:24px;" id="summaryBar">
+      <div id="profileNameEmail" style="min-width:180px;">
+        <div style="font-weight:600;" id="profName">—</div>
+        <div style="font-size:13px; color:var(--text-muted);" id="profEmail">—</div>
+      </div>
+      <span id="statSaved" style="color:var(--text-muted); font-size:13px;">— saved</span>
+      <span id="statRead" style="color:var(--text-muted); font-size:13px;">— articles read</span>
+      <span id="statLocation" style="color:var(--text-muted); font-size:13px;">—</span>
+    </div>
+
+    <div class="grid-12">
+      <!-- Left column: primary settings -->
+      <div style="grid-column: span 8;">
+        <section style="margin-bottom:40px;">
+          <div class="utility-row">
+            <h3>Interests</h3>
+            <button class="btn btn-ghost btn-sm" id="editInterestsBtn">Edit</button>
+          </div>
+          <div class="interest-grid" id="interestChips" style="margin-top:16px;"></div>
+        </section>
+
+        <hr class="rule">
+
+        <section style="margin:40px 0;">
+          <div class="utility-row">
+            <h3>Sources</h3>
+            <a href="/pages/topics.html" class="btn btn-ghost btn-sm">Browse</a>
+          </div>
+          <div class="tag-toggle-list" id="sourcesList" style="margin-top:16px;">
+            <p style="color:var(--text-muted); font-size:13px;">You haven't followed any sources yet. Browse Topics to find some.</p>
+          </div>
+        </section>
+
+        <hr class="rule">
+
+        <section style="margin-top:40px;">
+          <h3>Personalization</h3>
+          <div style="margin-top:16px;">
+            <div class="utility-row" style="align-items:flex-start; padding:16px 0; border-bottom:1px solid var(--border);">
+              <div style="max-width:468px;">
+                <h4 style="font-family:var(--font-serif); font-size:18px; font-weight:400;">Local news</h4>
+                <p style="color:var(--text-muted); font-size:14px; margin-top:8px;">Prioritize stories from your city, state, and country.</p>
+              </div>
+              <label class="switch"><input type="checkbox" id="localToggle"><span class="track"></span></label>
+            </div>
+            <div class="utility-row" style="align-items:flex-start; padding:16px 0; border-bottom:1px solid var(--border);">
+              <div style="max-width:468px;">
+                <h4 style="font-family:var(--font-serif); font-size:18px; font-weight:400;">Breaking news alerts</h4>
+                <p style="color:var(--text-muted); font-size:14px; margin-top:8px;">Get notified about major developing stories as they happen.</p>
+              </div>
+              <label class="switch"><input type="checkbox" id="breakingToggle"><span class="track"></span></label>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right column: secondary settings & actions -->
+      <div style="grid-column: span 4;">
+        <section style="margin-bottom:40px;">
+          <h3>Reading</h3>
+          <div class="link-list" style="margin-top:16px;">
+            <a href="/pages/saved.html">📑 Saved Articles</a>
+            <a href="#" id="viewHistoryLink">🕓 Reading History</a>
+          </div>
+        </section>
+
+        <hr class="rule">
+
+        <section style="margin:40px 0;">
+          <h3>Location</h3>
+          <div class="location-map-box" style="margin-top:16px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:12px;">
+                <span style="font-size:22px;">📍</span>
+                <div style="font-family:var(--font-serif); font-size:18px;" id="locationLabel">Not set</div>
+              </div>
+            </div>
+            <a href="/pages/onboarding-location.html?edit=1" class="btn btn-ghost btn-sm" style="align-self:flex-start; padding-left:0;">Change location</a>
+          </div>
+        </section>
+
+        <hr class="rule">
+
+        <section style="margin:40px 0;">
+          <h3>Appearance</h3>
+          <div class="segmented" style="margin-top:16px;" id="themeSegmented">
+            <button data-theme="light">☀️ Light</button>
+            <button data-theme="dark">🌙 Dark</button>
+            <button data-theme="system">🖥️ System</button>
+          </div>
+        </section>
+
+        <hr class="rule">
+
+        <section style="margin-top:40px;">
+          <h3>Account</h3>
+          <div class="link-list" style="margin-top:16px;">
+            <button id="changePwBtn">Change password →</button>
+            <button id="signOutBtn">Sign out</button>
+            <button id="deleteAcctBtn" style="color:var(--danger);">Delete account</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+
+function markThemeActive(theme) {
+  document.querySelectorAll('#themeSegmented button').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
+}
+
+(async () => {
+  const user = await requireAuthOrRedirect();
+  if (!user) return;
+
+  markThemeActive(NewsHubTheme.get());
+  document.getElementById('themeSegmented').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    NewsHubTheme.set(btn.dataset.theme);
+    markThemeActive(btn.dataset.theme);
+  });
+
+  try {
+    const profile = await NewsHubAPI.getProfile();
+    document.getElementById('profName').textContent = profile.user.name;
+    document.getElementById('profEmail').textContent = profile.user.email;
+    document.getElementById('statSaved').textContent = `${profile.stats.saved} saved`;
+    document.getElementById('statRead').textContent = `${profile.stats.articlesRead} articles read`;
+    document.getElementById('statLocation').textContent = profile.preferences.city
+      ? `📍 ${[profile.preferences.city, profile.preferences.country].filter(Boolean).join(', ')}` : 'No location set';
+    document.getElementById('locationLabel').textContent = profile.preferences.city
+      ? [profile.preferences.city, profile.preferences.state, profile.preferences.country].filter(Boolean).join(', ')
+      : 'Not set';
+
+    document.getElementById('interestChips').innerHTML = profile.interests.length
+      ? profile.interests.map(c => `<span class="chip selected">${c.name}</span>`).join('')
+      : `<p style="color:var(--text-muted); font-size:13px;">No interests selected yet.</p>`;
+
+    if (profile.sources.length) {
+      document.getElementById('sourcesList').innerHTML = profile.sources.map(s => `
+        <div class="item">
+          <span>${NewsHubChrome.escapeHtml(s.name)}</span>
+          <button class="btn btn-ghost btn-sm unfollow-source" data-id="${s.id}">Unfollow</button>
+        </div>`).join('');
+      document.querySelectorAll('.unfollow-source').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await NewsHubAPI.unfollowSource(btn.dataset.id);
+          btn.closest('.item').remove();
+        });
+      });
+    }
+
+    document.getElementById('localToggle').checked = !!profile.preferences.local_news_enabled;
+    document.getElementById('breakingToggle').checked = !!profile.preferences.breaking_news_enabled;
+
+    document.getElementById('localToggle').addEventListener('change', (e) => {
+      NewsHubAPI.updatePreferences({ localNewsEnabled: e.target.checked }).then(() => NewsHubChrome.toast('Preference saved'));
+    });
+    document.getElementById('breakingToggle').addEventListener('change', (e) => {
+      NewsHubAPI.updatePreferences({ breakingNewsEnabled: e.target.checked }).then(() => NewsHubChrome.toast('Preference saved'));
+    });
+  } catch (err) {
+    NewsHubChrome.toast('Could not load profile: ' + err.message);
+  }
+
+  document.getElementById('editInterestsBtn').addEventListener('click', () => {
+    window.location.href = '/pages/onboarding-interests.html?edit=1';
+  });
+
+  document.getElementById('viewHistoryLink').addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      const { history: hist } = await NewsHubAPI.getHistory();
+      const html = hist.length
+        ? hist.map(h => `${h.title} — ${NewsHubChrome.timeAgo(h.read_at)} (${h.reading_progress}% read)`).join('\n')
+        : 'No reading history yet.';
+      alert(html);
+    } catch (err) { NewsHubChrome.toast('Could not load history'); }
+  });
+
+  document.getElementById('signOutBtn').addEventListener('click', async () => {
+    await NewsHubAPI.signOut();
+    window.location.href = '/pages/signin.html';
+  });
+
+  document.getElementById('changePwBtn').addEventListener('click', async () => {
+    const currentPassword = prompt('Current password:');
+    if (currentPassword === null) return;
+    const newPassword = prompt('New password (min 8 characters):');
+    if (!newPassword) return;
+    try {
+      await NewsHubAPI.changePassword({ currentPassword, newPassword });
+      NewsHubChrome.toast('Password updated');
+    } catch (err) {
+      NewsHubChrome.toast(err.message);
+    }
+  });
+
+  document.getElementById('deleteAcctBtn').addEventListener('click', async () => {
+    if (!confirm('This will permanently delete your NewsHub account and all saved data. Continue?')) return;
+    try {
+      await NewsHubAPI.deleteAccount();
+      window.location.href = '/pages/signup.html';
+    } catch (err) {
+      NewsHubChrome.toast(err.message);
+    }
+  });
+})();
+</script>
+</body>
+</html>

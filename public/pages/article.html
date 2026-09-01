@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Article — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="page-main" id="articleRoot">
+  <div class="center-loading"><div class="spinner"></div> Loading article…</div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+
+const id = new URLSearchParams(location.search).get('id');
+const root = document.getElementById('articleRoot');
+
+function paragraphize(content) {
+  if (!content) return '<p>Full article content is available at the original source.</p>';
+  // NewsAPI truncates content with a "[+N chars]" suffix — strip that.
+  const cleaned = content.replace(/\[\+\d+ chars\]$/, '').trim();
+  return cleaned.split(/\n+/).filter(Boolean).map(p => `<p>${NewsHubChrome.escapeHtml(p)}</p>`).join('') || `<p>${NewsHubChrome.escapeHtml(cleaned)}</p>`;
+}
+
+async function load() {
+  if (!id) {
+    root.innerHTML = `<div class="empty-state"><h3>No article specified</h3></div>`;
+    return;
+  }
+  try {
+    const { article, related } = await NewsHubAPI.getArticle(id);
+
+    root.innerHTML = `
+      <div class="article-detail-header">
+        <div class="eyebrow accent">${NewsHubChrome.escapeHtml((article.categories?.[0]?.name || article.source?.name || 'NEWS').toUpperCase())}</div>
+        <h1>${NewsHubChrome.escapeHtml(article.title)}</h1>
+        <p style="font-family:var(--font-serif); font-size:19px; color:var(--text-muted);">${NewsHubChrome.escapeHtml(article.description || '')}</p>
+        <div class="article-actions-bar">
+          <span class="meta">BY ${NewsHubChrome.escapeHtml((article.author||'STAFF').toUpperCase())} • ${NewsHubChrome.timeAgo(article.publishedAt).toUpperCase()} • ${NewsHubChrome.escapeHtml(article.source?.name||'')}</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-secondary btn-sm" id="saveBtn">Save</button>
+          <button class="btn btn-secondary btn-sm" id="shareBtn">Share</button>
+          <a class="btn btn-primary btn-sm" href="${article.url}" target="_blank" rel="noopener">Read original ↗</a>
+        </div>
+      </div>
+      ${article.imageUrl ? `<div class="article-hero-image"><img src="${article.imageUrl}" alt=""></div>` : ''}
+      <div class="article-detail-body">${paragraphize(article.content)}</div>
+      ${related && related.length ? `
+        <div class="container">
+          <hr class="rule">
+          <h2 class="section-title">Related Stories</h2>
+        </div>
+        <div class="related-grid">
+          ${related.map(a => `
+            <article class="article-card">
+              <a href="/pages/article.html?id=${a.id}" class="article-media tall">
+                ${a.image_url ? `<img src="${a.image_url}" alt="" loading="lazy">` : ''}
+              </a>
+              <a href="/pages/article.html?id=${a.id}"><h3>${NewsHubChrome.escapeHtml(a.title)}</h3></a>
+              <p style="color:var(--text-muted); font-size:13px; margin:0;">${NewsHubChrome.escapeHtml(a.source_name||'')} • ${NewsHubChrome.timeAgo(a.published_at)}</p>
+            </article>`).join('')}
+        </div>` : ''}
+    `;
+
+    document.title = `${article.title} — NewsHub`;
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      try {
+        await NewsHubAPI.saveArticle(article.id);
+        NewsHubChrome.toast('Saved to your reading list');
+      } catch (err) {
+        NewsHubChrome.toast(err.message.includes('authenticated') ? 'Sign in to save articles' : 'Could not save');
+      }
+    });
+    document.getElementById('shareBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        NewsHubChrome.toast('Link copied to clipboard');
+      } catch (e) { NewsHubChrome.toast('Could not copy link'); }
+    });
+
+    // Track reading progress via scroll depth
+    let maxProgress = 0;
+    window.addEventListener('scroll', () => {
+      const scrolled = window.scrollY + window.innerHeight;
+      const total = document.body.scrollHeight;
+      const pct = Math.min(100, Math.round((scrolled / total) * 100));
+      if (pct > maxProgress) {
+        maxProgress = pct;
+        NewsHubAPI.updateReadProgress(article.id, pct).catch(() => {});
+      }
+    }, { passive: true });
+
+  } catch (err) {
+    root.innerHTML = `<div class="empty-state"><h3>Couldn't load this article</h3><p>${NewsHubChrome.escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

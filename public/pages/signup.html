@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Up — NewsHub</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+<div id="site-header"></div>
+
+<main id="main" class="auth-shell">
+  <div class="auth-card">
+    <h1>Create your NewsHub</h1>
+    <p class="lede">Sign up to get a personalized, location-aware news feed.</p>
+
+    <div id="formAlert" class="form-alert" style="display:none;"></div>
+
+    <form id="signupForm" novalidate>
+      <div class="field">
+        <label for="name">Full name</label>
+        <input id="name" name="name" type="text" autocomplete="name" required minlength="2">
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
+        <div class="field-hint">At least 8 characters.</div>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit" id="submitBtn">Create account</button>
+    </form>
+
+    <p class="auth-switch">Already have an account? <a href="/pages/signin.html">Sign in</a></p>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/chrome.js"></script>
+<script src="/js/helpers.js"></script>
+<script>
+NewsHubChrome.init(null);
+redirectIfAuthed();
+
+const form = document.getElementById('signupForm');
+const alertBox = document.getElementById('formAlert');
+const submitBtn = document.getElementById('submitBtn');
+
+function showAlert(msg) {
+  alertBox.textContent = msg;
+  alertBox.style.display = 'block';
+  alertBox.classList.remove('success');
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  alertBox.style.display = 'none';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Creating account…';
+
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  try {
+    await NewsHubAPI.signUp({ name, email, password });
+    window.location.href = '/pages/onboarding-interests.html';
+  } catch (err) {
+    showAlert(err.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create account';
+  }
+});
+</script>
+</body>
+</html>
