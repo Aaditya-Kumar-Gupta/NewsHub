@@ -1051,18 +1051,6 @@ NewsHUB V2 is built around five principles:
 
 ---
 
-# 👥 Contributors
-
-The original NewsHUB project contributors include:
-
-- [Aditya Kumar Gupta](https://github.com/Aaditya-Kumar-Gupta)
-- [Rishabh Bhardwaj](https://github.com/rishu-bhardwajjj)
-- [Abhi Grover](https://github.com/abhigrover12)
-- [Pratik](https://github.com/PratikXPramanik)
-- [Shobhit Sharma](https://github.com/ShobhitxSharma)
-
----
-
 # 🤝 GitHub Contributors
 
 We would like to recognize everyone who has contributed to the NewsHUB project through GitHub.
