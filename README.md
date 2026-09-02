@@ -4,6 +4,10 @@ A location-aware, personalized news web app built with **vanilla HTML/CSS/JS** o
 
 Design is grounded in the supplied Figma file (editorial serif headlines, warm terracotta/cream palette, teal accents).
 
+## 🌐 Live Website
+
+**[Visit NewsHub Live](https://newshub-z730.onrender.com/pages/home.html)**
+
 ## Architecture
 
 ```
@@ -67,3 +71,32 @@ This is a complete, runnable full-stack implementation of every required page an
 - Reverse-geocoding for "Use current location" during onboarding calls a free, keyless client-side geocoding API (`bigdatacloud.net`) purely to turn lat/lng into a city/state/country label — this is unrelated to the NewsAPI key rule (which only concerns NewsAPI.org) and never touches the server. Only city-level, rounded coordinates are ever persisted.
 - The personalization engine scores against whatever has already been ingested into MySQL (via prior headline/search/local calls). In a production deployment you'd add a scheduled job calling `ingestionService` on a cron to keep the candidate pool fresh continuously; the hook points for that are in `server/services/ingestionService.js`.
 - The 36 Figma frames map onto ~13 distinct page templates (desktop/mobile/state variants of the same designs); this build implements one responsive template per page rather than 36 separate static screens, per the brief's own instruction that "Figma mobile screens are references for responsive behavior," not separate pages.
+
+## 🤝 GitHub Contributors
+
+We would like to recognize everyone who has contributed to the NewsHUB project through GitHub.
+
+<a href="https://github.com/Aaditya-Kumar-Gupta/NewsHub/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Aaditya-Kumar-Gupta/NewsHub" alt="NewsHUB GitHub Contributors" />
+</a>
+
+### 👥 Project Contributors
+
+We're grateful to everyone who has contributed to the development and improvement of NewsHUB.
+
+<a href="https://github.com/rishu-bhardwajjj">
+  <img src="https://github.com/rishu-bhardwajjj.png" width="60" height="60" alt="Rishabh Bhardwaj" />
+</a>
+<a href="https://github.com/abhigrover12">
+  <img src="https://github.com/abhigrover12.png" width="60" height="60" alt="Abhi Grover" />
+</a>
+<a href="https://github.com/PratikXPramanik">
+  <img src="https://github.com/PratikXPramanik.png" width="60" height="60" alt="Pratik" />
+</a>
+<a href="https://github.com/ShobhitxSharma">
+  <img src="https://github.com/ShobhitxSharma.png" width="60" height="60" alt="Shobhit Sharma" />
+</a>
+
+> 💙 Thank you to everyone who has contributed code, ideas, feedback, testing, and improvements to NewsHUB.
+
+[View all contributors on GitHub](https://github.com/Aaditya-Kumar-Gupta/NewsHub/graphs/contributors)
