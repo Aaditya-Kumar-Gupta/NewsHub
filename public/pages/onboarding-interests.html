@@ -8,41 +8,54 @@
 <script src="/js/theme.js"></script>
 </head>
 <body>
-<div id="site-header"></div>
+<a href="#main" class="skip-link">Skip to content</a>
 
-<main class="onboard-shell">
-  <div class="onboard-progress">
-    <div class="step done"></div>
-    <div class="step"></div>
-    <div class="step"></div>
-  </div>
-  <h1>What do you want to follow?</h1>
-  <p class="lede">Pick a few topics you care about. You can change these any time in Settings.</p>
+<main id="main" class="auth-split">
+  <section class="auth-visual dark-panel" id="visualPanel" aria-hidden="true">
+    <a href="/pages/home.html" class="visual-brand">NewsHub</a>
+    <div class="auth-visual-copy">
+      <h2>Tell us what to <em>chase</em>, and we'll do the rest.</h2>
+      <p>Pick a few beats you care about — technology, business, sport, culture. Your feed follows your lead.</p>
+    </div>
+  </section>
 
-  <div id="formAlert" class="form-alert" style="display:none;"></div>
-  <div class="interest-grid" id="interestGrid">
-    <div class="center-loading"><div class="spinner"></div> Loading topics…</div>
-  </div>
+  <section class="auth-form-panel">
+    <div class="auth-form-inner" style="max-width:520px;">
+      <div class="brand-mobile">NewsHub</div>
 
-  <div class="onboard-actions">
-    <span style="color:var(--text-muted);font-size:13px;" id="selectedCount">0 selected</span>
-    <button class="btn btn-primary" id="continueBtn" disabled>Continue</button>
-  </div>
-  <p id="skipBackLink" style="display:none; text-align:center; margin-top:16px;"><a href="/pages/profile.html" style="color:var(--text-muted); font-size:13px;">Cancel</a></p>
+      <div class="step-indicator-row" id="stepRow">
+        <span class="step-label">2 of 3: Interests</span>
+        <span class="step-dots"><span></span><span class="active"></span><span></span></span>
+      </div>
+
+      <h1>What do you want to follow?</h1>
+      <p class="lede">Pick a few topics you care about. You can change these any time in Settings.</p>
+
+      <div id="formAlert" class="form-alert" style="display:none;"></div>
+      <div class="interest-grid" id="interestGrid">
+        <div class="center-loading"><div class="spinner"></div> Loading topics…</div>
+      </div>
+
+      <div class="onboard-actions">
+        <span style="color:var(--text-muted);font-size:13px;" id="selectedCount">0 selected</span>
+        <button class="btn btn-primary" id="continueBtn" disabled>Continue →</button>
+      </div>
+      <p id="skipBackLink" style="display:none; text-align:center; margin-top:16px;"><a href="/pages/profile.html" style="color:var(--text-muted); font-size:13px;">Cancel</a></p>
+    </div>
+  </section>
 </main>
-
-<div id="site-footer"></div>
 
 <script src="/js/api.js"></script>
 <script src="/js/chrome.js"></script>
 <script src="/js/helpers.js"></script>
 <script>
-NewsHubChrome.init(null);
 let selected = new Set();
 const isEdit = new URLSearchParams(location.search).get('edit') === '1';
 if (isEdit) {
   document.getElementById('skipBackLink').style.display = 'block';
-  document.querySelector('.onboard-progress').style.display = 'none';
+  document.getElementById('stepRow').style.display = 'none';
+  document.getElementById('visualPanel').style.display = 'none';
+  document.querySelector('.auth-form-panel').style.flex = '1 1 100%';
 }
 
 (async () => {
@@ -99,7 +112,7 @@ document.getElementById('continueBtn').addEventListener('click', async () => {
     alertBox.textContent = err.message;
     alertBox.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = 'Continue';
+    btn.textContent = 'Continue →';
   }
 });
 </script>
