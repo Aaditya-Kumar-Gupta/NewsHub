@@ -8,55 +8,76 @@
 <script src="/js/theme.js"></script>
 </head>
 <body>
-<div id="site-header"></div>
+<a href="#main" class="skip-link">Skip to content</a>
 
-<main class="onboard-shell">
-  <div class="onboard-progress">
-    <div class="step done"></div>
-    <div class="step done"></div>
-    <div class="step"></div>
-  </div>
-  <h1>Where should we localize your news?</h1>
-  <p class="lede">We use your city and country to surface locally relevant stories. We never store your exact GPS coordinates.</p>
-
-  <div id="formAlert" class="form-alert" style="display:none;"></div>
-
-  <button type="button" class="btn btn-secondary" id="useCurrentBtn" style="margin-bottom:24px;">
-    📍 Use current location
-  </button>
-
-  <form id="locationForm">
-    <div class="field">
-      <label for="country">Country</label>
-      <select id="country" required></select>
+<main id="main" class="auth-split">
+  <section class="auth-visual light-panel" id="visualPanel" aria-hidden="true">
+    <a href="/pages/home.html" class="visual-brand">NewsHub</a>
+    <span class="watermark-word w1">LOCAL</span>
+    <span class="watermark-word w2">NATION</span>
+    <span class="watermark-word w3">GLOBAL</span>
+    <div class="auth-visual-copy">
+      <h2>Every story, placed<br>where you stand.</h2>
+      <p>We use your city and country to prioritize what's happening near you — before national and global stories.</p>
     </div>
-    <div class="field">
-      <label for="state">State / Region</label>
-      <input id="state" type="text" placeholder="e.g. Karnataka">
-    </div>
-    <div class="field">
-      <label for="city">City</label>
-      <input id="city" type="text" placeholder="e.g. Bengaluru" required>
-    </div>
-    <input type="hidden" id="lat">
-    <input type="hidden" id="lng">
-  </form>
+  </section>
 
-  <div class="onboard-actions">
-    <a href="/pages/onboarding-interests.html" class="btn btn-ghost">Back</a>
-    <button class="btn btn-primary" id="continueBtn">Continue</button>
-  </div>
+  <section class="auth-form-panel">
+    <div class="auth-form-inner" style="max-width:480px;">
+      <div class="brand-mobile">NewsHub</div>
+
+      <div class="step-indicator-row" id="stepRow">
+        <span class="step-label">3 of 3: Location</span>
+        <span class="step-dots"><span></span><span></span><span class="active"></span></span>
+      </div>
+
+      <h1>Where should we localize your news?</h1>
+      <p class="lede">We never store your exact GPS coordinates — just your city, state, and country.</p>
+
+      <div id="formAlert" class="form-alert" style="display:none;"></div>
+
+      <button type="button" class="btn btn-secondary btn-block" id="useCurrentBtn" style="margin-bottom:20px;">
+        📍 Use current location
+      </button>
+
+      <form id="locationForm">
+        <div class="field-plain">
+          <label for="country">Country</label>
+          <select id="country" required></select>
+        </div>
+        <div class="field-plain">
+          <label for="state">State / Region</label>
+          <input id="state" type="text" placeholder="e.g. Karnataka">
+        </div>
+        <div class="field-plain">
+          <label for="city">City</label>
+          <input id="city" type="text" placeholder="e.g. Bengaluru" required>
+        </div>
+        <input type="hidden" id="lat">
+        <input type="hidden" id="lng">
+      </form>
+
+      <div class="onboard-actions">
+        <a href="/pages/onboarding-interests.html" class="btn btn-ghost" id="backLink">Back</a>
+        <button class="btn btn-primary" id="continueBtn">Build My NewsHub →</button>
+      </div>
+    </div>
+  </section>
 </main>
-
-<div id="site-footer"></div>
 
 <script src="/js/api.js"></script>
 <script src="/js/chrome.js"></script>
 <script src="/js/helpers.js"></script>
 <script>
-NewsHubChrome.init(null);
 const isEdit = new URLSearchParams(location.search).get('edit') === '1';
-if (isEdit) document.querySelector('.onboard-progress').style.display = 'none';
+if (isEdit) {
+  document.getElementById('stepRow').style.display = 'none';
+  document.getElementById('visualPanel').style.display = 'none';
+  document.querySelector('.auth-form-panel').style.flex = '1 1 100%';
+  document.getElementById('backLink').textContent = 'Cancel';
+  document.getElementById('backLink').href = '/pages/profile.html';
+  document.getElementById('continueBtn').textContent = 'Save location';
+}
 
 const COUNTRIES = [
   { name: 'India', code: 'IN' }, { name: 'United States', code: 'US' },
@@ -131,6 +152,7 @@ document.getElementById('continueBtn').addEventListener('click', async () => {
   }
   const countryOption = countrySelect.options[countrySelect.selectedIndex];
   const btn = document.getElementById('continueBtn');
+  const originalLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
@@ -154,7 +176,7 @@ document.getElementById('continueBtn').addEventListener('click', async () => {
     alertBox.textContent = err.message;
     alertBox.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = 'Continue';
+    btn.textContent = originalLabel;
   }
 });
 </script>
