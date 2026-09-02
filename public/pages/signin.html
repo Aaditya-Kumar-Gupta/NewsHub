@@ -9,43 +9,77 @@
 </head>
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
-<div id="site-header"></div>
 
-<main id="main" class="auth-shell">
-  <div class="auth-card">
-    <h1>Welcome back</h1>
-    <p class="lede">Sign in to your NewsHub account.</p>
+<main id="main" class="auth-split">
+  <!-- Left: editorial visual panel with watermark topic words -->
+  <section class="auth-visual light-panel" aria-hidden="true">
+    <a href="/pages/home.html" class="visual-brand">NewsHub</a>
+    <span class="watermark-word w1">TECHNOLOGY</span>
+    <span class="watermark-word w2">WORLD</span>
+    <span class="watermark-word w3">ECONOMY</span>
+    <div class="auth-visual-copy">
+      <h2>Welcome back<br>to your news.</h2>
+      <p>Pick up where you left off with stories shaped around what matters to you.</p>
+      <span class="watermark-word location-word">INDIA</span>
+    </div>
+  </section>
 
-    <div id="formAlert" class="form-alert" style="display:none;"></div>
+  <!-- Right: sign-in form -->
+  <section class="auth-form-panel">
+    <div class="auth-form-inner">
+      <div class="brand-mobile">NewsHub</div>
+      <h1>Sign in</h1>
+      <p class="lede">Welcome back. Your personalized briefing is waiting.</p>
 
-    <form id="signinForm" novalidate>
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
-      </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-      </div>
-      <button class="btn btn-primary btn-block" type="submit" id="submitBtn">Sign in</button>
-    </form>
+      <div id="formAlert" class="form-alert" style="display:none;"></div>
 
-    <p class="auth-switch">New to NewsHub? <a href="/pages/signup.html">Create an account</a></p>
-  </div>
+      <form id="signinForm" novalidate>
+        <div class="field-plain">
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </div>
+        <div class="field-plain">
+          <div class="label-row">
+            <label for="password">Password</label>
+            <a href="#" id="forgotLink">Forgot password?</a>
+          </div>
+          <div class="field-password-wrap">
+            <input id="password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+            <button type="button" class="toggle-eye" id="togglePw" aria-label="Show password">
+              <svg width="20" height="16" viewBox="0 0 20 16" fill="none"><path d="M1 8s3.5-6.5 9-6.5S19 8 19 8s-3.5 6.5-9 6.5S1 8 1 8z" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="8" r="2.6" stroke="currentColor" stroke-width="1.4"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" type="submit" id="submitBtn" style="letter-spacing:1px; text-transform:uppercase; padding:14px;">Sign in</button>
+      </form>
+
+      <p class="auth-switch" style="margin-top:24px;">New to NewsHub? <a href="/pages/signup.html">Create your account</a></p>
+
+      <p class="auth-security-note">Your account and preferences are protected.<br>You can change your personalization settings anytime.</p>
+    </div>
+  </section>
 </main>
-
-<div id="site-footer"></div>
 
 <script src="/js/api.js"></script>
 <script src="/js/chrome.js"></script>
 <script src="/js/helpers.js"></script>
 <script>
-NewsHubChrome.init(null);
 redirectIfAuthed();
 
 const form = document.getElementById('signinForm');
 const alertBox = document.getElementById('formAlert');
 const submitBtn = document.getElementById('submitBtn');
+
+document.getElementById('togglePw').addEventListener('click', () => {
+  const input = document.getElementById('password');
+  input.type = input.type === 'password' ? 'text' : 'password';
+});
+
+document.getElementById('forgotLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  NewsHubChrome.toast('Password reset isn\'t wired up in this demo yet.');
+});
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
